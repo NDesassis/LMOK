@@ -222,7 +222,7 @@ SPDE_LMOK_krigsim <- function(dbout, dbin, model, mesh = NA,
     print(paste0(" - n.mesh         = ", n.mesh))
     print(paste0(" - dim(A_out)     = ", dim(A_out)))
   }
-  for (i in 1:n.var) {
+  for (i in 1:length(spde$coeff)) {
     if (verbose) {print(paste0("Processing factor #",i))}
     # compute the estimate
     Z_out <- (A_out%*%spde$Z[1:n.mesh+(i-1)*n.mesh,1])[,1] + spde$coeff[i]
@@ -294,4 +294,116 @@ SPDE_LMOK_init_MLL <- function(dbin, param2model, mesh = NA, verbose = TRUE){
     return(ll_val)
   }
   return(fn_LL)
+}
+
+#' ---------------------------------------------------------------------
+#' Utility functions to implement LMOK with SPDE approach
+#' ---------------------------------------------------------------------
+
+SPDE_eval_diff <- function(u,v) {
+  tab <- matrix(c(mean(u - v), mean(abs(u-v)), sqrt(mean((u-v)^2))), nrow = 1, ncol = 3)
+  colnames(tab) <- c("mean", "MAE", "RMSE")
+  tab
+}
+
+#' Definition of the parameters of the LMOK
+SPDE_param2value <- function(param, nu = 1, margin = 0.2, nodes = c(100, 100), type = "IntFac"){
+  ll <- NULL
+  if(type == "IntFac"){
+    ll <- list(
+      nodes   = nodes,
+      margin  = margin,
+      nu      = nu,
+      type    = type,
+      range   = param[5],
+      sigma_1 = abs(param[1]),
+      sigma_2 = abs(sqrt(param[2]^2 + param[3]^2)),
+      tau     = param[2] / sqrt(param[2]^2 + param[3]^2),
+      sigma   = abs(param[4])
+    )
+  }
+  if(type == "IndFac"){
+    ll <- list(
+      nodes   = nodes,
+      margin  = margin,
+      nu      = nu,
+      type    = type,
+      sigma_1 = abs(param[1]),
+      sigma_2 = abs(param[2]),
+      sigma   = abs(param[3]),
+      range_1 = param[4],
+      range_2 = param[5]
+    )
+  }
+  ll
+}
+
+SPDE_value2param <- function(value){
+  par <- NULL
+  if(value$type == "IntFac"){
+    par <- c(
+      value$sigma_1, 
+      value$tau * value$sigma_2, 
+      value$sigma_2 * sqrt(1-value$tau^2), 
+      value$sigma, 
+      value$range
+    )
+  }
+  if(value$type == "IndFac"){
+    par <- c(
+      value$sigma_1, 
+      value$sigma_2, 
+      value$sigma, 
+      value$range_1,
+      value$range_2
+    )
+  }
+  par  
+}
+
+# Create a RGeostats model from a parameters structure
+SPDE_param2model <- function(param){
+  m <- NULL
+  if(param$type == "IndFac"){
+    m <- model.create(vartype = 8, 
+                      param = param$nu, 
+                      range = param$range_1,
+                      sill  = matrix(c(param$sigma_1^2, rep(0,3)),2,2)
+    )
+    m <- model.create(vartype = 8, 
+                      param = param$nu, 
+                      range = param$range_2,
+                      sill = matrix(c(rep(0,3),param$sigma_2^2),2,2),
+                      model = m
+    )
+  } else if(param$type == "IntFac") {
+    covM <- matrix(c(param$sigma_1^2,
+                     rep(param$sigma_1*param$sigma_2*param$tau,2),
+                     param$sigma_2^2), 2, 2)
+    m <- model.create(vartype = 8, 
+                      param = param$nu, 
+                      range = param$range,
+                      sill  = covM
+    )
+  } else if(param$type == "bivar") {
+    m <- NULL
+    covM <- matrix(0, 4, 4)
+    covM[1:2, 1:2] <- matrix(
+      c(param$coef_1[1]^2, rep(prod(param$coef_1),2), param$coef_1[2]^2),
+      2, 2)
+    m <- model.create(vartype = 8,
+                      param = param$nu,
+                      range = param$range[1],
+                      sill  = covM)
+    covM <- matrix(0, 4, 4)
+    covM[3:4, 3:4] <- matrix(
+      c(param$coef_2[1]^2, rep(prod(param$coef_2),2), param$coef_2[2]^2),
+      2, 2)
+    m <- model.create(vartype = 8,
+                      param = param$nu,
+                      range = param$range[2],
+                      sill  = covM, 
+                      model = m)
+  }
+  m
 }

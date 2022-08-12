@@ -16,14 +16,12 @@ library(Matrix)
 rm(list=ls())
 constant.define("asp",1)
 set.seed(seed=125875)
-setwd("~/geostat/theses/2021_Luc_CCR/2022-05-01_CCR_Etude/Rmd")
+nsim = 1000
 ```
-
 # Fonctions
 
 ```{r LMOK_init, echo = TRUE, eval=TRUE}
 source(file = "./functions_kriging.R")
-source(file = "./functions_spde_v0.R")
 source(file = "./functions_spde.R")
 source(file = "./functions_Xval.R")
 ```
@@ -32,10 +30,19 @@ source(file = "./functions_Xval.R")
 
 ```{r data_init, echo = TRUE, eval=TRUE}
 load(file = "../Data/test_LMOK.RData")
-grd <- db.locate(grd, names = "*.S", loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = "*.S", loctype = "z", flag.locnew = TRUE)
+# Surface for Type "a"
+grd <- db.locate(grd, names = "a.S", loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, names = "a.S", loctype = "z", flag.locnew = TRUE)
 plot(grd, pos.legend = 8)
 plot(dat, add = TRUE)
+
+# selections on the input database
+sel_train <- rep(FALSE, dat$nech)
+sel_train[sort(sample(1:dat$nech, 100))] <- TRUE
+dat <- db.add(dat, sel_train)
+dat <- db.add(dat, sel_train_a = as.numeric(sel_train & (dat$Type == 1)))
+dat <- db.add(dat, sel_train_b = as.numeric(sel_train & (dat$Type == 2)))
+dat <- db.add(dat, Un = 1.0)
 ```
 
 # model
@@ -43,8 +50,8 @@ plot(dat, add = TRUE)
 ```{r Model_init, echo = TRUE, eval = TRUE}
 # Paramètres du modèle
 sigma   <- c(2, 3)  # Ecart type de l'erreur de modélisation
-coef_0  <- c(2.5, 3.5, 0.7)   #  coefficient de la première corégionalisation
-coef_1  <- c(5.0, 7.0, 0.8)   #  coefficient de la seconde corégionalisation
+coef_1  <- c(2.5, 3.5, 0.7)   #  coefficient de la première corégionalisation
+coef_2  <- c(5.0, 7.0, 0.8)   #  coefficient de la seconde corégionalisation
 ab      <- matrix(c(12, 9, 5, 12), 2, 2) # Espérance des coefficients pour 
 range   <- c(0.15, 0.25)  # Portée pratique des deux covariance de Matern
 
@@ -60,8 +67,8 @@ margin  <- 0.2      # Proportion pour l'extension de la zone à mailler
 param_CoefBi <- list(nodes   = nodes, margin  = margin,
   type = "bivar", 
   nu = nu, 
-  coef_0 = coef_0, 
   coef_1 = coef_1, 
+  coef_2 = coef_2, 
   sigma = sigma, 
   range = range
   )
@@ -70,8 +77,8 @@ param_CoefBi <- list(nodes   = nodes, margin  = margin,
 param_IndFac_a <- list(nodes   = nodes, margin  = margin,
   type = "IndFac", 
   nu = nu,
-  sigma_1 = coef_0[1],
-  sigma_2 = coef_1[1],
+  sigma_1 = coef_1[1],
+  sigma_2 = coef_2[1],
   sigma   = sigma[1],
   range_1 = range[1],
   range_2 = range[2]
@@ -81,8 +88,8 @@ param_IndFac_a <- list(nodes   = nodes, margin  = margin,
 param_IndFac_b <- list(nodes   = nodes, margin  = margin,
   type = "IndFac", 
   nu = nu,
-  sigma_1 = coef_0[2],
-  sigma_2 = coef_1[2],
+  sigma_1 = coef_1[2],
+  sigma_2 = coef_2[2],
   sigma   = sigma[2],
   range_1 = range[1],
   range_2 = range[2]
@@ -91,222 +98,30 @@ param_IndFac_b <- list(nodes   = nodes, margin  = margin,
 param_IntFac_a <- list(nodes   = nodes, margin  = margin,
   type = "IntFac", 
   nu = nu,
-  sigma_1 = coef_0[1],
-  sigma_2 = coef_1[1],
+  sigma_1 = coef_1[1],
+  sigma_2 = coef_2[1],
   tau     = 0.7,
   sigma   = sigma[1],
   range   = range[1]
 )
 
+param_IntFac_b <- list(nodes   = nodes, margin  = margin,
+  type = "IntFac", 
+  nu = nu,
+  sigma_1 = coef_1[2],
+  sigma_2 = coef_2[2],
+  tau     = 0.5,
+  sigma   = sigma[2],
+  range   = range[1]
+)
+
 # Parametres pour le cokrigeage des biens (a) et (b) equivalent à un krigeage indépendant
 param_CoefBi_ind <- param_CoefBi
-param_CoefBi_ind$coef_0[3] <- 0.0
 param_CoefBi_ind$coef_1[3] <- 0.0
+param_CoefBi_ind$coef_2[3] <- 0.0
 ```
 
-# Functions LMOK vs. Kriging
-
-## Mise en oeuvre du krigeage avec LMOK
-
-```{r OK_vs_LMOK_init, echo=TRUE, eval=TRUE}
-sel_train <- rep(FALSE, dat$nech)
-sel_train[sort(sample(1:dat$nech, 100))] <- TRUE
-```
-
-### Type (a)
-
-```{r OK_and_LMOK_a, echo=TRUE, eval=TRUE}
-dat     <- db.delete(dat, c("Un", "sigma2", "sel_train_a"))
-# model du type (a) avec paramètres indépendants
-param   <- param_IndFac_a
-cov.1   <- matrix(c(param$sigma_1^2, 0,0,0), 2, 2)
-cov.2   <- matrix(c(0, 0, 0, param$sigma_2^2), 2, 2)
-model.a <- model.create(vartype = 8, param =  param$nu,
-                        range = param$range_1, sill = cov.1)
-model.a <- model.create(vartype = 8, param =  param$nu,
-                        range = param$range_2, sill = cov.2, model = model.a)
-
-# Selection des données
-sel_train_a <- (sel_train)&(dat$Type == 1)
-dat     <- db.add(dat, sel_train_a)
-
-
-# kriging
-dat <- db.locate(dat, names = c("N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
-grd <- OK_kriging(dbout = grd, dbin = dat, param = param, radix = "OK.a",
-                  flag.estim = TRUE, flag.stdev = FALSE)
-
-# LMOK
-# erreur de mesure/modélisation
-dat <- db.add(dat, sigma2 = param$sigma^2)
-dat <- db.locate(dat, names = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-# facteur
-dat <- db.add(dat, Un = 1.0)
-dat <- db.locate(dat, names = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
-grd <- LMOK_kriging(dbout = grd, dbin = dat, model = model.a, radix = "LMOK.a",
-                  flag.estim = TRUE, flag.stdev = FALSE, verbose = TRUE)
-
-correlation(grd, name1 = "LMOK.a.Z1.estim", name2 = "OK.a.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-
-correlation(grd, name1 = "LMOK.a.Z2.estim", name2 = "OK.a.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-```
-
-### Type (b)
-
-```{r OK_and_LMOK_b, echo=TRUE, eval=TRUE}
-dat     <- db.delete(dat, c("Un", "sigma2", "sel_train_b"))
-# model du type (b) avec paramètres indépendants
-param   <- param_IndFac_b
-cov.1   <- matrix(c(param$sigma_1^2, 0,0,0), 2, 2)
-cov.2   <- matrix(c(0, 0, 0, param$sigma_2^2), 2, 2)
-model.b <- model.create(vartype = 8, param =  param$nu,
-                        range = param$range_1, sill = cov.1)
-model.b <- model.create(vartype = 8, param =  param$nu,
-                        range = param$range_2, sill = cov.2, model = model.b)
-
-# Selection des données
-sel_train_b <- (sel_train)&(dat$Type == 2)
-dat     <- db.add(dat, sel_train_b)
-
-# kriging
-dat <- db.locate(dat, names = c("N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sel_train_b"), loctype = "sel", flag.locnew = TRUE)
-grd <- OK_kriging(dbout = grd, dbin = dat, param = param, radix = "OK.b",
-                  flag.estim = TRUE, flag.stdev = FALSE)
-
-# LMOK
-# erreur de mesure/modélisation
-dat <- db.add(dat, sigma2 = param$sigma^2)
-dat <- db.locate(dat, names = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-# facteur
-dat <- db.add(dat, Un = 1.0)
-dat <- db.locate(dat, names = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sel_train_b"), loctype = "sel", flag.locnew = TRUE)
-grd <- LMOK_kriging(dbout = grd, dbin = dat, model = model.b, radix = "LMOK.b",
-                  flag.estim = TRUE, flag.stdev = FALSE, verbose = TRUE)
-
-correlation(grd, name1 = "LMOK.b.Z1.estim", name2 = "OK.b.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-
-correlation(grd, name1 = "LMOK.b.Z2.estim", name2 = "OK.b.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-```
-
-
-## Mise en oeuvre du cokrigeage avec LMOK
-
-```{r COK_vs_LMOK_init, echo=TRUE, eval=TRUE}
-# data base cleaning
-dat     <- db.delete(dat, c("Un.a","Un.b", "N.a", "N.b", "sigma2", "sel_train*"))
-grd     <- db.delete(grd, c("COK*", "LMOK_BiInd.*"))
-# Selection des données
-dat     <- db.add(dat, sel_train)
-# Parameters
-param   <- param_CoefBi_ind
-```
-
-```{r COK_and_LMOK, echo=TRUE, eval=TRUE}
-# model avec paramètres indépendants: COK <=> OK
-# kriging
-dat <- db.locate(dat, names = c("N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("Type"), loctype = "code", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
-grd <- OK_cokriging(dbout = grd, dbin = dat, param = param, radix = "COK_BiInd",
-                  flag.estim = TRUE, flag.stdev = FALSE)
-
-# Facteurs indépendants -> OK <=> COK
-correlation(grd, name1 = "COK_BiInd.a.Z0.estim", name2 = "OK.a.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "COK_BiInd.a.Z1.estim", name2 = "OK.a.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "COK_BiInd.b.Z0.estim", name2 = "OK.b.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "COK_BiInd.b.Z1.estim", name2 = "OK.b.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-
-# Appel direct de LMOK::kriging
-
-# model
-cov.1   <- rbind(cbind(
-  matrix(c(param$coef_0[1]^2, rep(prod(param$coef_0), 2), param$coef_0[2]^2), 2, 2),
-  matrix(0.0, 2, 2)),
-  matrix(0.0, 2, 4))
-cov.2   <- rbind(
-  matrix(0.0, 2, 4),
-  cbind(
-  matrix(0.0, 2, 2),
-  matrix(c(param$coef_1[1]^2, rep(prod(param$coef_1), 2), param$coef_1[2]^2), 2, 2))
-)
-model.bi <- model.create(vartype = 8, param =  param$nu,
-                        range = param$range[1], sill = cov.1)
-model.bi <- model.create(vartype = 8, param =  param$nu,
-                        range = param$range[2], sill = cov.2, model = model.bi)
-
-# LMOK
-dat <- db.delete(dat, names = c("sigma2", "Un.a", "Un.b", "N.a", "N.b"))
-# erreur de mesure/modélisation
-sigma2 <- rep(0.0, dat$nech)
-sigma2[dat$Type == 1] <- param$sigma[1]^2
-sigma2[dat$Type == 2] <- param$sigma[2]^2
-# facteurs
-Un.a <- as.numeric(dat$Type == 1)
-Un.b <- as.numeric(dat$Type == 2)
-N.a  <- dat$N; N.a[dat$Type != 1] <- 0.0 
-N.b  <- dat$N; N.b[dat$Type != 2] <- 0.0 
-dat <- db.add(dat, Un.a, Un.b, N.a, N.b, sigma2)
-dat <- db.locate(dat, names = c("Un.a", "Un.b", "N.a", "N.b"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-dat <- db.locate(dat, names = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
-dat <- db.locerase(dat, loctype = "code")
-grd <- LMOK_kriging(dbout = grd, dbin = dat, model = model.bi, radix = "LMOK_BiInd",
-                  idx = 1:4, flag.estim = TRUE, flag.stdev = FALSE, verbose = TRUE)
-
-correlation(grd, name1 = "LMOK_BiInd.Z1.estim", name2 = "OK.a.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "LMOK_BiInd.Z2.estim", name2 = "OK.b.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "LMOK_BiInd.Z3.estim", name2 = "OK.a.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "LMOK_BiInd.Z4.estim", name2 = "OK.b.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-```
-
-## Mise en oeuvre du cokrigeage avec SPDE
-
-```{r SPDE_cokriging, echo=TRUE, eval=TRUE}
-# Premier version
-dat <- db.locerase(dat, loctype = "v")
-dat <- db.locate(dat, name = "N", loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, name = "S", loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, name = "Type", loctype = "code", flag.locnew = TRUE)
-dat <- db.locate(dat, name = "sel_train", loctype = "sel", flag.locnew = TRUE)
-
-grd <- SPDE_cokrigsim(
-  dbout = grd, dbin = dat, param = param, mesh = NA, nsim = 0, seed = NA, 
-                           flag.ce = FALSE, radix = "SPDE_BiInd")
-# SPDE <=> LMOK_BiInd
-correlation(grd, name1 = "LMOK_BiInd.Z1.estim", name2 = "SPDE_BiInd.a.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "LMOK_BiInd.Z2.estim", name2 = "SPDE_BiInd.b.Z0.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "LMOK_BiInd.Z3.estim", name2 = "SPDE_BiInd.a.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-correlation(grd, name1 = "LMOK_BiInd.Z4.estim", name2 = "SPDE_BiInd.b.Z1.estim",
-            flag.iso = TRUE, flag.diag = TRUE, diag.col = "red")
-```
-
-
-# Seconde version
+fonction de comparaison (eg. LMOK vs. SPDE_LMOK)
 
 ```{r eval_LMOK_fn, echoTRUE, eval=TRUE}
 
@@ -326,24 +141,188 @@ correlation_LMOK <- function(model, grd, pref, name1, name2, idx = 1:3){
 ```
 
 
-## Deux facteurs indépendants
+# Mise en oeuvre du LMOK en mono-variable
+
+# Cas mono-facteur
+
+## Constante $1$
+
+$$
+S_k = Z_1(s_k) \times 1 + \epsilon_k
+$$
+
+### Type (a)
+
+```{r eval_LMOK_Un_a, echo=TRUE, eval=TRUE}
+# re-initialisation
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle
+param <- param_IndFac_a; pref <- "Un.a"
+m     <- SPDE_param2model(param = param)
+m     <- model.reduce(m, vars = 1, structs = 1)
+dat   <- db.add(dat, sigma2 = param$sigma^2)
+
+# Selection des variables
+dat <- db.locate(dat, name = c("N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
+
+grd <- LMOK_kriging(grd, dbin = dat, model = m, 
+                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
+                    radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 0, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 1000, flag.ce = TRUE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+
+correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
+```
+
+### Type (b)
+
+```{r eval_LMOK_Un_b, echo=TRUE, eval=TRUE}
+# re-initialisation
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle
+param <- param_IndFac_b; pref <- "Un.b"
+m     <- SPDE_param2model(param = param)
+m     <- model.reduce(m, vars = 1, structs = 1)
+dat   <- db.add(dat, sigma2 = param$sigma^2)
+
+# Selection des variables
+dat <- db.locate(dat, name = c("N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_b"), loctype = "sel", flag.locnew = TRUE)
+
+grd <- LMOK_kriging(grd, dbin = dat, model = m, 
+                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
+                    radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 0, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 1000, flag.ce = TRUE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+
+correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
+```
+
+## Nombre de pièces $N$
+
+$$
+S_k = Z_1(s_k) \times N_k + \epsilon_k
+$$
+
+### Type (a)
+
+```{r eval_LMOK_N_a, echo=TRUE, eval=TRUE}
+# re-initialisation
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle
+param <- param_IndFac_a; pref <- "N.a"
+m     <- SPDE_param2model(param = param)
+m     <- model.reduce(m, vars = 2, structs = 2)
+dat   <- db.add(dat, sigma2 = param$sigma^2)
+
+# Selection des variables
+dat <- db.locate(dat, name = c("N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
+
+grd <- LMOK_kriging(grd, dbin = dat, model = m, 
+                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
+                    radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 0, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 1000, flag.ce = TRUE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+
+correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
+```
+
+### Type (b)
+
+```{r eval_LMOK_N_b, echo=TRUE, eval=TRUE}
+# re-initialisation
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle
+param <- param_IndFac_b; pref <- "N.b"
+m     <- SPDE_param2model(param = param)
+m     <- model.reduce(m, vars = 2, structs = 2)
+dat   <- db.add(dat, sigma2 = param$sigma^2)
+
+# Selection des variables
+dat <- db.locate(dat, name = c("N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_b"), loctype = "sel", flag.locnew = TRUE)
+
+grd <- LMOK_kriging(grd, dbin = dat, model = m, 
+                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
+                    radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 0, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
+                    nsim = 1000, flag.ce = TRUE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+
+correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
+```
+
+# Mono-variable 
+
+## Paramètres spatiaux indépendants
 
 $$
 S_k = Z_1(s_k) \times 1 + Z_2(s_k) \times N_k + \epsilon_k
 $$
+avec
+$$
+ \{Cov((Z_i(s), Z_j(s')\}_{i,j \in 1:2} = 
+ \begin{pmatrix}
+ \sigma_1^2            & 0 \\
+ 0                     & 0
+ \end{pmatrix} \times \rho_1(s-s') +
+ \begin{pmatrix}
+ 0                     & 0 \\
+ 0                     & \sigma_2^2  
+ \end{pmatrix} \times \rho_2(s-s')
+$$
+### Données de type (a)
 
-
-```{r eval_LMO_1, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
+```{r eval_LMOK_a_Ind, echo=TRUE, eval=TRUE}
+# re-initialisation
 dat  <- db.locerase(dat, "z")
 dat  <- db.locerase(dat, "f")
 dat  <- db.locerase(dat, "code")
-dat  <- db.delete(dat, "sigma2")
 dat  <- db.locerase(dat, "sel")
-
+dat  <- db.delete(dat, "sigma2")
 # Definition du modèle
-param <- param_IndFac_a; pref <- "Un_N" # monovariable - IndFac
+param <- param_IndFac_a; pref <- "Un_N.a"
 m     <- SPDE_param2model(param = param)
 dat   <- db.add(dat, sigma2 = param$sigma^2)
 
@@ -355,98 +334,48 @@ dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TR
 grd <- LMOK_kriging(grd, dbin = dat, model = m, 
                     idx = 1:2, flag.estim = TRUE, flag.stdev = TRUE,
                     radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
-                    nsim = 0, flag.ce = FALSE,
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = 0, seed = NA, flag.ce = FALSE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
-                    nsim = 1000, flag.ce = TRUE,
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = nsim, seed = NA, flag.ce = TRUE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
 
 correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
 ```
 
-## Un facteur - Nombre de pièces
-
-$$
-S_k = Z_1(s_k) \times N_k + \epsilon_k
-$$
-
-```{r eval_LMOK_2, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
-dat  <- db.delete(dat, "sigma2")
+### Données de type (b) 
+```{r eval_LMOK_b_Ind, echo=TRUE, eval=TRUE}
+# re-initialisation
 dat  <- db.locerase(dat, "z")
 dat  <- db.locerase(dat, "f")
 dat  <- db.locerase(dat, "code")
 dat  <- db.locerase(dat, "sel")
-
-# Definition du modèle
-param <- param_IndFac_a; pref <- "N" # monovariable - IndFac
-m     <- SPDE_param2model(param = param)
-m     <- model.reduce(m, vars = 2, structs = 2)
-dat   <- db.add(dat, sigma2 = param$sigma^2)
-
-# Selection des variables
-dat <- db.locate(dat, name = c("N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
-grd <- LMOK_kriging(grd, dbin = dat, model = m, 
-                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
-                    radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
-                    nsim = 0, flag.ce = FALSE,
-                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
-                    nsim = 1000, flag.ce = TRUE,
-                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
-
-correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
-```
-
-## Un facteur - Une constante
-
-$$
-S_k = Z_1(s_k) \times 1 + \epsilon_k
-$$
-
-```{r eval_LMOK_3, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
 dat  <- db.delete(dat, "sigma2")
-dat  <- db.locerase(dat, "z")
-dat  <- db.locerase(dat, "f")
-dat  <- db.locerase(dat, "code")
-dat  <- db.locerase(dat, "sel")
-
 # Definition du modèle
-param <- param_IndFac_a; pref <- "Un" # monovariable - IndFac
+param <- param_IndFac_b; pref <- "Un_N.b"
 m     <- SPDE_param2model(param = param)
-m     <- model.reduce(m, vars = 2, structs = 2) # Un seul facteur
 dat   <- db.add(dat, sigma2 = param$sigma^2)
 
 # Selection des variables
-dat <- db.locate(dat, name = c("Un"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_b"), loctype = "sel", flag.locnew = TRUE)
 grd <- LMOK_kriging(grd, dbin = dat, model = m, 
-                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
+                    idx = 1:2, flag.estim = TRUE, flag.stdev = TRUE,
                     radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
-                    nsim = 0, flag.ce = FALSE,
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = 0, seed = NA, flag.ce = FALSE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, 
-                    nsim = 1000, flag.ce = TRUE,
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = nsim, seed = NA, flag.ce = TRUE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
 
 correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
 ```
 
-## Deux facteurs en correlation intrinsèque
+## Paramètres spatiaux en coregionalisation intrinsèque
 
 $$
 S_k = Z_1(s_k) \times 1 + Z_2(s_k) \times N_k +\epsilon_k
@@ -460,43 +389,72 @@ $$
 $$
 
 
-```{r eval_LMOK_4, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
-dat  <- db.delete(dat, "sigma2")
+### Données de type (a) 
+
+```{r eval_LMOK_a_Int, echo=TRUE, eval=TRUE}
+# re-initialisation
 dat  <- db.locerase(dat, "z")
 dat  <- db.locerase(dat, "f")
 dat  <- db.locerase(dat, "code")
 dat  <- db.locerase(dat, "sel")
-
-
-# Definition du modèle : Bi-variable en corrélation intrinsèque
-param <- param_IntFac_a; pref <- "Int" 
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle
+param <- param_IntFac_a; pref <- "Un_N.a.Int"
 m     <- SPDE_param2model(param = param)
 dat   <- db.add(dat, sigma2 = param$sigma^2)
 
 # Selection des variables
-dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
-
 dat <- db.locate(dat, name = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
 grd <- LMOK_kriging(grd, dbin = dat, model = m, 
-                    idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
+                    idx = 1:2, flag.estim = TRUE, flag.stdev = TRUE,
                     radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
-                    nsim = 0, flag.ce = FALSE,
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = 0, seed = NA, flag.ce = FALSE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
-                    nsim = 1000, flag.ce = TRUE,
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = nsim, seed = NA, flag.ce = TRUE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
 
 correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
 ```
 
 
-## Modèle bivariable avec les facteurs en correlation intrinsèque (ind)
+### Données de type (b) 
+
+```{r eval_LMOK_b_Int, echo=TRUE, eval=TRUE}
+# re-initialisation
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle
+param <- param_IntFac_b; pref <- "Un_N.b.Int"
+m     <- SPDE_param2model(param = param)
+dat   <- db.add(dat, sigma2 = param$sigma^2)
+
+# Selection des variables
+dat <- db.locate(dat, name = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_b"), loctype = "sel", flag.locnew = TRUE)
+grd <- LMOK_kriging(grd, dbin = dat, model = m, 
+                    idx = 1:2, flag.estim = TRUE, flag.stdev = TRUE,
+                    radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = 0, seed = NA, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m, mesh = NA,
+                    nsim = nsim, seed = NA, flag.ce = TRUE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+
+correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
+```
+
+# Cas bi-variable
 
 $$
 S^{(a)}_k = Z_1(s_k) \times 1 + Z_2(s_k) \times N^{(a)}_k +\epsilon^{(a)}_k
@@ -507,6 +465,7 @@ S^{(b)}_k = Z_3(s_k) \times 1 + Z_4(s_k) \times N^{(b)}_k +\epsilon^{(b)}_k
 $$
 
 avec
+
 $$
 Cov(Z_i(s), Z_j(s')) = 
  \begin{pmatrix}
@@ -525,16 +484,32 @@ Cov(Z_i(s), Z_j(s')) =
  \times \rho_b(s-s')
 
 $$
-```{r eval_LMOK_5, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
-dat  <- db.delete(dat, "sigma2")
+
+Définition des facteurs dans le cas bivariable
+
+```{r LMOK_bivar_ini, echo=TRUE, eval=TRUE}
+Un.a <- rep(0, dat$nech)
+Un.a[dat$Type == 1] <- 1.0
+Un.b <- rep(0, dat$nech)
+Un.b[dat$Type == 2] <- 1.0
+N.a  <- rep(0.0, dat$nech)
+N.a[dat$Type == 1] <- dat$N[dat$Type == 1]
+N.b  <- rep(0.0, dat$nech)
+N.b[dat$Type == 2] <- dat$N[dat$Type == 2]
+dat   <- db.add(dat, Un.a, Un.b, N.a, N.b)
+```
+
+
+## Paramètres spatiaux indépendants
+
+```{r eval_LMOK_BiInd, echo=TRUE, eval=TRUE}
+# re-initialisation
 dat  <- db.locerase(dat, "z")
 dat  <- db.locerase(dat, "f")
 dat  <- db.locerase(dat, "code")
 dat  <- db.locerase(dat, "sel")
-
-# Definition du modèle : Bi-variable en corrélation intrinsèque
+dat  <- db.delete(dat, "sigma2")
+# Definition du modèle : Bi-variable avec facteurs indépendants
 param <- param_CoefBi_ind; pref <- "BiInd" 
 m     <- SPDE_param2model(param = param)
 sigma2 <- rep(NaN, dat$nech)
@@ -544,14 +519,13 @@ dat   <- db.add(dat, sigma2)
 
 # Selection des variables
 dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
-
 dat <- db.locate(dat, name = c("Un.a", "Un.b", "N.a", "N.b"), loctype = "f", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+
 grd <- LMOK_kriging(grd, dbin = dat, model = m, 
                     idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
                     radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
 grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
                     nsim = 0, flag.ce = FALSE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
@@ -562,17 +536,15 @@ grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
 correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
 ```
 
-## Modèle bivariable avec les facteurs en correlation intrinsèque (non ind)
+## Paramètres spatiaux en coregionalisation intrinsèque
 
-```{r eval_LMOK_6, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
-dat  <- db.delete(dat, "sigma2")
+```{r eval_LMOK_BiInt, echo=TRUE, eval=TRUE}
+# re-initialisation
 dat  <- db.locerase(dat, "z")
 dat  <- db.locerase(dat, "f")
 dat  <- db.locerase(dat, "code")
 dat  <- db.locerase(dat, "sel")
-
+dat  <- db.delete(dat, "sigma2")
 # Definition du modèle : Bi-variable en corrélation intrinsèque
 param <- param_CoefBi; pref <- "BiInt" 
 m     <- SPDE_param2model(param = param)
@@ -583,14 +555,13 @@ dat   <- db.add(dat, sigma2)
 
 # Selection des variables
 dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
-
 dat <- db.locate(dat, name = c("Un.a", "Un.b", "N.a", "N.b"), loctype = "f", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+
 grd <- LMOK_kriging(grd, dbin = dat, model = m, 
                     idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
                     radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
 grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
                     nsim = 0, flag.ce = FALSE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
@@ -601,47 +572,11 @@ grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
 correlation_LMOK(m, grd, pref, name1 = "LMOK", name2 = "SPDE_LMOK")
 ```
 
-## Nouvelle implémentation
+# Calcul de la vraisemblance
 
-```{r eval_LMOK_7, echo=TRUE, eval=TRUE}
-# grd0 <- grd # backup
-grd  <- db.delete(grd, "*OK*")
-dat  <- db.delete(dat, "sigma2")
-dat  <- db.locerase(dat, "z")
-dat  <- db.locerase(dat, "f")
-dat  <- db.locerase(dat, "code")
-dat  <- db.locerase(dat, "sel")
-
-# Definition du modèle : Bi-variable en corrélation intrinsèque
-param <- param_IndFac_a; pref <- "Ind_a" 
-m     <- SPDE_param2model(param = param)
-sigma2 <- rep(param$sigma^2, dat$nech)
-dat   <- db.add(dat, sigma2)
-
-# Selection des variables
-dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
-
-dat <- db.locate(dat, name = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-# grd <- LMOK_kriging(grd, dbin = dat, model = m, 
-#                     idx = NA, flag.estim = TRUE, flag.stdev = TRUE,
-#                     radix = paste("LMOK", pref, sep = "."), verbose = TRUE)
-
-grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m,
-                    nsim = 100, flag.ce = TRUE,
-                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
-grd <- SPDE_LMOK_krigsim_OLD(grd, dbin = dat, model = m,
-                    nsim = 100, flag.ce = TRUE,
-                    radix = paste("SPDE_LMOK_OLD", pref, sep = "."), verbose = TRUE)
-
-correlation_LMOK(m, grd, pref, name1 = "SPDE_LMOK", name2 = "SPDE_LMOK_OLD", idx = 2:3)
-
-# Test de la vraisemblance
-
-
+```{r eval_MLL, echo=TRUE, eval=TRUE}
 #' ------------------------------------------------------------
-#'  Auxiliary function: BiInd (Two independant factors)
+#'  Auxiliary function: 1_N.Ind (Two independant factors)
 #' x[1] = sigma_1 (Standard deviation of Z_1)
 #' x[2] = range_1 (Practical range of Z_1)
 #' x[3] = sigma_2 (Standard deviation of Z_2)
@@ -649,7 +584,7 @@ correlation_LMOK(m, grd, pref, name1 = "SPDE_LMOK", name2 = "SPDE_LMOK_OLD", idx
 #' x[5] = sigma   (Standard deviation of the measurement error)
 #' ------------------------------------------------------------
 
-create_model_BiInd <- function(x, verbose = TRUE){
+create_model_BiFInd <- function(x, verbose = TRUE){
   nu = 3.0
   model <- model.create(8, range = x[2], sill = matrix(c(x[1]^2,0,0,0),2,2))
   model <- model.create(8, range = x[4], sill = matrix(c(0,0,0,x[3]^2),2,2), 
@@ -661,10 +596,23 @@ create_model_BiInd <- function(x, verbose = TRUE){
   list(model = model, sigma = x[5])
 }
 # illustration
-x <- c(2.5, 0.15, 5, 0.25, 2)
-create_model_BiInd(x, verbose = TRUE)
-# Creation of the function computing the log-likelihood
-fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = create_model_BiInd, verbose = FALSE)
+x <- c(param_IndFac_a$sigma_1, param_IndFac_a$range_1,
+       param_IndFac_a$sigma_2, param_IndFac_a$range_2,
+       param_IndFac_a$sigma)
+create_model_BiFInd(x, verbose = TRUE)
+
+# re-initialisation de la base de données
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Selection des variables
+dat <- db.locate(dat, name = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
+
+fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = create_model_BiFInd, verbose = FALSE)
 fn_MLL(x, verbose = FALSE)
 
 #' ------------------------------------------------------------
@@ -676,7 +624,7 @@ fn_MLL(x, verbose = FALSE)
 #' x[5] = sigma   (Standard deviation of the measurement error)
 #' ------------------------------------------------------------
 
-create_model_BiInt <- function(x, verbose = TRUE){
+create_model_BiFInt <- function(x, verbose = TRUE){
   nu = 3.0
   c0 <- matrix(c(x[1]^2, rep(prod(x[1:3]), 2), x[2]^2), 2, 2)
   model <- model.create(8, range = x[4], sill = c0)
@@ -687,13 +635,27 @@ create_model_BiInt <- function(x, verbose = TRUE){
   list(model = model, sigma = x[5])
 }
 # illustration
-x <- c(2.5, 5, 0.7, 0.25, 2)
+x <- c(param_IntFac_a$sigma_1,
+       param_IntFac_a$sigma_2,
+       param_IntFac_a$tau,
+       param_IntFac_a$range,
+       param_IntFac_a$sigma)
 create_model_BiInt(x, verbose = TRUE)
 
-# Creation of the function computing the log-likelihood
-fn_MLL2 <- SPDE_LMOK_init_MLL(dat, param2model = create_model_BiInt, verbose = FALSE)
-fn_MLL2(x, verbose = FALSE)
+# re-initialisation de la base de données
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Selection des variables
+dat <- db.locate(dat, name = c("Un", "N"), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("S"), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train_a"), loctype = "sel", flag.locnew = TRUE)
 
+# Creation of the function computing the log-likelihood
+fn_MLL2 <- SPDE_LMOK_init_MLL(dat, param2model = create_model_BiFInt, verbose = FALSE)
+fn_MLL2(x, verbose = FALSE)
 
 #' ------------------------------------------------------------
 #' Auxiliary function: bivar (intrinsic coregionalisation of the factors)
@@ -737,23 +699,42 @@ create_model_bivar <- function(x, verbose = TRUE){
   }
   list(model = model, sigma = c(x[9], x[10]))
 }
-# illustration
-x <- c(2.5, 5, 5, 10, 0.7, 0.5, 0.15, 0.25, 2, 3)
-create_model_bivar(x, verbose = TRUE)
-
-# Creation of the function computing the log-likelihood
+# re-initialisation de la base de données
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Selection des variables
 dat <- db.locate(dat, names = "sel_train", loctype = "sel", flag.locnew = TRUE)
 dat <- db.locate(dat, names = "Type", loctype = "code", flag.locnew = TRUE)
 dat <- db.locate(dat, names = "S", loctype = "z", flag.locnew = TRUE)
 dat <- db.locate(dat, names = c("Un.a", "Un.b", "N.a", "N.b"), loctype = "f", flag.locnew = TRUE)
-dat <- db.delete(dat, names = "sigma2")
+
 fn_MLL_bivar <- SPDE_LMOK_init_MLL(dat, param2model = create_model_bivar, verbose = FALSE)
+
+
+# illustration # coregionalisation intrinsèque
+x <- c(
+  param_CoefBi$coef_1[1:2], 
+  param_CoefBi$coef_2[1:2], 
+  param_CoefBi$coef_1[3],
+  param_CoefBi$coef_2[3],
+  param_CoefBi$range,
+  param_CoefBi$sigma)
 
 fn_MLL_bivar(x, verbose = FALSE)
 
+# illustration # indépendance des facteurs
+x <- c(
+  param_CoefBi$coef_1[1:2], 
+  param_CoefBi$coef_2[1:2], 
+  0.0, 
+  0.0,
+  param_CoefBi$range,
+  param_CoefBi$sigma)
 
-
-
+fn_MLL_bivar(x, verbose = FALSE)
 ```
 
 
