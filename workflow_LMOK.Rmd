@@ -1,0 +1,245 @@
+---
+  title: "Workflow LMOK"
+  author: "X. Freulon, N. Desassis, H. Wackernagel"
+  date: "12 août 2022"
+  output:
+    pdf_document: default
+    html_document: default
+---
+
+# Initialisation
+
+R et RGeostats
+
+```{r R_init, echo=TRUE, eval=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RGeostats)
+library(Matrix)
+rm(list=ls())
+constant.define("asp",1)
+set.seed(seed=125875)
+nsim = 1000 # Number of simulations to compute CE
+np = 100    # Number of samples in the training data base
+n.fold = 10 # Number of folds for the cross-validation
+nm_var = "a.S"
+nm_fac = "a.N"
+```
+
+Loading simulated data
+
+```{r data_init, echo = TRUE, eval=TRUE}
+load(file = "../Data/test_LMOK.RData")
+grd <- db.locate(grd, names = nm_var, loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, names = nm_var, loctype = "z", flag.locnew = TRUE)
+plot(grd, pos.legend = 8)
+plot(dat, add = TRUE)
+
+# selections on the input database
+sel_train <- rep(FALSE, dat$nech)
+sel_train[sort(sample(1:dat$nech, np))] <- TRUE
+dat <- db.add(dat, sel_train)
+dat <- db.add(dat, Un = 1.0)
+```
+
+
+```{r Model_init, echo = TRUE, eval = TRUE}
+# Paramètres du modèle
+sigma   <- c(2, 3)  # Ecart type de l'erreur de modélisation
+coef_1  <- c(2.5, 3.5, 0.7)   #  coefficient de la première corégionalisation
+coef_2  <- c(5.0, 7.0, 0.8)   #  coefficient de la seconde corégionalisation
+ab      <- matrix(c(12, 9, 5, 12), 2, 2) # Espérance des coefficients pour 
+range   <- c(0.15, 0.25)  # Portée pratique des deux covariance de Matern
+
+nu      <- 3        # Coefficient de la covariance de Matern
+nodes   <- c(100,100) # Valeur par default pour le meshing
+margin  <- 0.2      # Proportion pour l'extension de la zone à mailler
+
+# Paramètres pour le cokrigeage des biens (a) et (b)
+param_CoefBi <- list(nodes   = nodes, margin  = margin,
+  type = "bivar", 
+  nu = nu, 
+  coef_1 = coef_1, 
+  coef_2 = coef_2, 
+  sigma = sigma, 
+  range = range
+  )
+# required in SPDE_LMOK_init_geometry if mesh not provided
+param <- list(margin = margin, nodes = nodes, nu = nu)
+```
+
+LMOK fonctions
+
+```{r LMOK_init, echo = TRUE, eval=TRUE}
+source(file = "./functions_kriging.R")
+source(file = "./functions_spde.R")
+source(file = "./functions_Xval.R")
+```
+
+# Estimation des paramètres par MLL
+
+Modèle mono-variable de la surface $S$ des biens de type (a) avec deux facteurs $1$ et $N$.
+
+$$
+S_k = Z_1(s_k) \times 1 + Z_2(s_k) \times N_k + \epsilon_k
+$$
+
+Les paramètres spatiaux du modèle linéaire $(Z_1, Z_2)$ sont en corégionalisation intrinsèque:
+
+$$
+ \{Cov((Z_i(s), Z_j(s')\}_{i,j \in 1:2} = 
+ \begin{pmatrix}
+ \sigma_1^2            & \sigma_1\sigma_2\tau \\
+ \sigma_1\sigma_2\tau  & \sigma_2^2
+ \end{pmatrix} \times K_{\nu} \left(\frac{|s-s'|}{a}\right)
+$$
+
+Les paramètres du modèles sont donc:
+
+* les écarts types et le coefficient de corrélation, $(\sigma_1, \sigma_2, \tau)$
+* la partée de la covariance de Matern, $a$
+* l'écart type de l'erreur de mesure variances et covariances, $\sigma$
+
+Le paramètre de régularité de la covariance de Matern est fixée $\nu = 3$.
+
+La fonction d'initialisation d'un modèle LMOK à partir d'un vecteur de paramètres est définie:
+$$ x = (\sigma_1, \sigma_2, \tau, a, \sigma)$$
+```{r MLOK_MLL_ini, echo=TRUE, eval=TRUE}
+#' ------------------------------------------------------------
+#'  Auxiliary function: BiInt (intrinsic coregionalisation of the two factors)
+#' x[1] = sigma_1 (Standard deviation of Z_1)
+#' x[2] = sigma_2 (Standard deviation of Z_2)
+#' x[3] = tau     (correlation coefficient between the two factors)
+#' x[4] = range   (Practical range of the factors)
+#' x[5] = sigma   (Standard deviation of the measurement error)
+#' ------------------------------------------------------------
+create_model_BiFInt <- function(x, verbose = TRUE){
+  nu = param$nu
+  c0 <- matrix(c(x[1]^2, rep(prod(x[1:3]), 2), x[2]^2), 2, 2)
+  model <- model.create(8, range = x[4], sill = c0)
+  if (verbose){
+    print(model)
+    print(paste0("sigma = ", x[5]))
+  }
+  list(model = model, sigma = x[5])
+}
+
+# illustration avec les paramètres de simulation
+x <- c(param_CoefBi$coef_1, param_CoefBi$range[1], param_CoefBi$sigma[1]) 
+create_model_BiFInt(x, verbose = TRUE)
+
+# re-initialisation de la base de données
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "code")
+dat  <- db.locerase(dat, "sel")
+dat  <- db.delete(dat, "sigma2")
+# Selection des variables
+dat <- db.locate(dat, name = c("Un", nm_fac), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
+
+# Creation of the function computing the log-likelihood
+fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = create_model_BiFInt, verbose = FALSE)
+fn_MLL(x, verbose = FALSE)
+```
+
+Optimisation de la vraisemblance
+
+```{r LMOK_MLL, eval=TRUE, echo=FALSE}
+# Valeurs à l'initialisation
+x_ini <- x
+fn_MLL(x_ini, verbose = TRUE)
+# res   <- optim(par = x_ini, fn = fn_MLL, verbose=F, method="BFGS", control = cont)
+# x_est <- res$par
+x_est <- x_ini
+
+tab <- rbind(x_ini, x_est)
+colnames(tab) <- c("sigma_1", "sigma_2", "tau", "a", "sigma")
+rownames(tab) <- c("Initial", "Final")
+knitr::kable(round(tab,2), caption = "Maximum de vraisemblance")
+
+# creation of the model and measurement error variable
+res   <- create_model_BiFInt(x_est, verbose = TRUE)
+m_est <- res$model
+dat   <- db.delete(dat, names = "sigma2") # To prevent duplicate
+dat   <- db.add(dat, sigma2  =  res$sigma^2)
+dat   <- db.locate(dat, names = "sigma2", loctype = "v", flag.locnew = TRUE)
+```
+
+# Validation croisée par K-fold
+
+Le nombre de *folds* est fixé à $K$.
+
+```{r LMOK_kfold, echo=TRUE, eval=TRUE}
+# Creation of the folds for the cross-validation
+dat <- db.add(dat, folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE))
+dat <- db.locate(dat, names = "folds", loctype = "code", flag.locnew = TRUE)
+# 
+dat <- db.locerase(dat, loctype = "sel")
+dat <- db.locate(dat, names = nm_var, loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, names = c("Un", nm_fac), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, names = "sigma2", loctype = "v", flag.locnew = TRUE)
+
+# calcul de la validation par K-fold
+dat <- SPDE_LMOK_kfold_compute(dat, model = m_est, verbose = TRUE, radix = "kfold")
+
+# calcul de la validation par K-fold
+tab <- SPDE_LMOK_kfold_results(dat, name_real = "a.S", name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+
+# Map of the absolute value of the validation residual
+dat <- db.add(dat, AResidual = abs(dat[,"a.S"] - dat[,"kfold.S.estim"]))
+
+# The map is computed on a regular grid 1x1 km^2
+dat.grd <- db.grid.init(dat, dcell = rep(0.1, 2))
+dat.grd <- db.stat.grid(dat, dat.grd, fun = "mini")
+dat.grd <- db.rename(dat.grd, names = "Stats.AResidual", newnames = "Minimum of residual")
+plot(dat.grd, pos.legend = 3)
+# data cleaning
+dat <- db.delete(dat, names = "AResidual")
+```
+
+
+# Estimation des coefficients
+
+Toutes les données disponibles sont maintenant utilisées.
+
+```{r LMOK_eval, echo=TRUE, eval=TRUE}
+# re-initialisation
+dat  <- db.locerase(dat, "sel")
+dat  <- db.locerase(dat, "z")
+dat  <- db.locerase(dat, "f")
+dat  <- db.locerase(dat, "v")
+dat  <- db.locerase(dat, "code")
+
+# Selection des variables
+dat <- db.locate(dat, name = c("Un", nm_fac), loctype = "f", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
+dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
+
+pref<- paste(nm_var, "Int", sep = ".")
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = NA,
+                    nsim = 0, seed = NA, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = NA,
+                    nsim = nsim, seed = NA, flag.ce = TRUE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+```
+
+
+# Presentation des résultats
+
+```{r LMOK_results, echo=TRUE, eval=TRUE}
+# map of the estimated values
+plot(grd, name = paste("SPDE_LMOK", pref, "Z1", "estim", sep = "."), pos.legend = 8)
+plot(dat, name = nm_var, add = TRUE)
+plot(grd, name = paste("SPDE_LMOK", pref, "Z2", "estim", sep = "."), pos.legend = 8)
+plot(dat, name = nm_var, add = TRUE)
+# map of the standard deviation of the estimation error
+plot(grd, name = paste("SPDE_LMOK", pref, "Z1", "ce.stdev", sep = "."), pos.legend = 8)
+plot(dat, name = nm_var, add = TRUE)
+plot(grd, name = paste("SPDE_LMOK", pref, "Z2", "ce.stdev", sep = "."), pos.legend = 8)
+plot(dat, name = nm_var, add = TRUE)
+# statistics
+tab <- db.stat.multi(grd, names = "SPDE_LMOK.*")
+knitr::kable(round(tab,2), caption = "Estimation des coefficients")
