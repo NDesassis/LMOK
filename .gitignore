@@ -1,3 +1,5 @@
+.Rhistory
+*.pdf
 *.RData
 .Rproj.user
 LMOK.Rproj
