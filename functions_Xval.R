@@ -8,6 +8,67 @@
 #'  Required in dbin, locators defined "z", "f1", "code" (f0 is the constant 1.0)
 #'  Optional in dbin, a selection defined (locator "sel")
 
+#'-------------------------------
+#' Compute the K-fold cross validation (with two factors)
+#'-------------------------------
+#' Two functions compute and results
+#'  - "SPDE_kfold_compute" computes the xval on the input data base and returns it
+#'  - "SPDE_kfold_results" presents different figures and return the score table
+#'  
+#'  Required in dbin, locators defined "z", "f1", "code" (f0 is the constant 1.0)
+#'  Optional in dbin, a selection defined (locator "sel")
+
+SPDE_LMOK_kfold_compute <- function(dbin, model,  mesh = NA, 
+                               radix = "SPDE_LMOK.kfold", verbose = TRUE){
+  idx_in_z <- db.getcols(dbin, loctype = "z")
+  idx_in_f <- db.getcols(dbin, loctype = "f")
+  idx_in_c <- db.getcols(dbin, loctype = "code")
+  idx_in_s <- db.getcols(dbin, loctype = "sel")
+  stopifnot(length(idx_in_z) == 1)
+  stopifnot(length(idx_in_f) == model$nvar)
+  stopifnot(length(idx_in_c) == 1)
+  
+  folds <- db.extract(dbin, names = idx_in_c, flag.compress = FALSE)
+  if (is.null(idx_in_s)) {sel <- rep(TRUE, dbin$nech)} 
+  else {
+    sel   <- (db.extract(dbin, names = idx_in_s) > 0)
+  }
+  
+  l_folds <- sort(unique(folds[sel]))
+  K <- length(l_folds)
+  
+  if(verbose) {
+    print(paste0("K-fold: cross validation of ", 
+                 names(dbin@items)[idx_in_z], " with factor ",
+                 names(dbin@items)[idx_in_f]
+    )
+    )
+    print(paste0("K-fold: K = ", K))
+  }
+  
+  Z1_estim <- rep(NaN, dbin$nech)
+  Z2_estim <- rep(NaN, dbin$nech)
+  
+  for (c in l_folds){
+    sel_in  <- sel & (!is.na(folds))&(folds != c)
+    sel_out <- sel & (!is.na(folds))&(folds == c)
+    
+    if(verbose) {
+      print(paste0("K-fold: processing fold #",c))
+    }
+    res <- SPDE_LMOK_krigsim(
+      dbin  = db.sel(dbin, sel_in),
+      dbout = db.sel(dbin, sel_out), 
+      model = model, mesh = mesh, nsim = 0, radix = radix)
+    Z1_estim[sel_out] <- db.extract(res, paste(radix, "Z1", "estim", sep = "."), flag.compress = TRUE)
+    Z2_estim[sel_out] <- db.extract(res, paste(radix, "Z2", "estim", sep = "."), flag.compress = TRUE)
+  }
+  
+  S_estim <- Z1_estim * dbin[,idx_in_f[1]] + Z2_estim * dbin[,idx_in_f[2]]
+  db.add(dbin, names = paste(radix, "S", "estim", sep = "."), S_estim)
+}
+
+# Old interface with param instead of model
 SPDE_kfold_compute <- function(dbin, param,  mesh = NA, 
                                radix = "SPDE.kfold", verbose = TRUE){
   idx_in_z <- db.getcols(dbin, loctype = "z")
@@ -61,6 +122,17 @@ SPDE_kfold_compute <- function(dbin, param,  mesh = NA,
 #' Function to display the results of the cross validation stored in a db
 #' stats gives the list of statistics to be computed
 #'  number, mean, MAE, RMSE, min, max, median
+SPDE_LMOK_kfold_results <- function(dbin, name_real, name_esti, stats = c("number", "mean", "MAE", "RMSE"),
+                               radix = "kfold", flag.fig = TRUE){
+  SPDE_kfold_results(
+    dbin = dbin, 
+    name_real = name_real, 
+    name_esti = name_esti, 
+    stats = stats,
+    radix = radix, 
+    flag.fig = flag.fig)
+}
+  
 
 SPDE_kfold_results <- function(dbin, name_real, name_esti, stats = c("number", "mean", "MAE", "RMSE"),
                                radix = "K-fold", flag.fig = TRUE){
