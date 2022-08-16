@@ -158,10 +158,12 @@ SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = TRUE){
     }
     items[[1+length(items)]] <- list(M = qMi, Q = Qi)
   }
+  print(model)
+  cholPrec =  Cholesky(prec, LDL=FALSE)
   return(list(
     items    = items,
     D        = D,
-    cholPrec = Cholesky(prec, LDL=FALSE)
+    cholPrec = cholPrec
   ))
 }
   
