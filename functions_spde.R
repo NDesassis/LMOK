@@ -167,7 +167,7 @@ SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = TRUE){
   
 SPDE_LMOK_init_spde <- function(geo, mod, verbose = TRUE){
   computeInvSigma <- function(X, A, cholPrec, D){
-    D %*% (X - A %*% (solve(cholPrec, t(A)) %*% D %*% X))
+    D %*% (X - A %*% (solve(cholPrec, t(A) %*% D %*% X)))
   }
   # computing the estimate on the mesh
   invSigmaX <- computeInvSigma(geo$X, geo$Aproj, mod$cholPrec, mod$D)

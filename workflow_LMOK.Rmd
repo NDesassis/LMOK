@@ -17,105 +17,84 @@ library(RGeostats)
 library(Matrix)
 rm(list=ls())
 constant.define("asp",1)
+
+```
+
+Paramétrage 
+
+```{r}
 set.seed(seed=125875)
 nsim = 1000 # Number of simulations to compute CE
 np = 100    # Number of samples in the training data base
 n.fold = 10 # Number of folds for the cross-validation
-nm_var = "a.S"
-nm_fac = "a.N"
-```
-
-Loading simulated data
-
-```{r data_init, echo = TRUE, eval=TRUE}
-load(file = "../Data/test_LMOK.RData")
-grd <- db.locate(grd, names = nm_var, loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, names = nm_var, loctype = "z", flag.locnew = TRUE)
-plot(grd, pos.legend = 8)
-plot(dat, add = TRUE)
-
-# selections on the input database
-sel_train <- rep(FALSE, dat$nech)
-sel_train[sort(sample(1:dat$nech, np))] <- TRUE
-dat <- db.add(dat, sel_train)
-dat <- db.add(dat, Un = 1.0)
-```
-
-
-```{r Model_init, echo = TRUE, eval = TRUE}
-# Paramètres du modèle
-sigma   <- c(2, 3)  # Ecart type de l'erreur de modélisation
-coef_1  <- c(2.5, 3.5, 0.7)   #  coefficient de la première corégionalisation
-coef_2  <- c(5.0, 7.0, 0.8)   #  coefficient de la seconde corégionalisation
-ab      <- matrix(c(12, 9, 5, 12), 2, 2) # Espérance des coefficients pour 
-range   <- c(0.15, 0.25)  # Portée pratique des deux covariance de Matern
-
-nu      <- 3        # Coefficient de la covariance de Matern
-nodes   <- c(100,100) # Valeur par default pour le meshing
-margin  <- 0.2      # Proportion pour l'extension de la zone à mailler
-
-# Paramètres pour le cokrigeage des biens (a) et (b)
-param_CoefBi <- list(nodes   = nodes, margin  = margin,
-  type = "bivar", 
-  nu = nu, 
-  coef_1 = coef_1, 
-  coef_2 = coef_2, 
-  sigma = sigma, 
-  range = range
-  )
-# required in SPDE_LMOK_init_geometry if mesh not provided
-param <- list(margin = margin, nodes = nodes, nu = nu)
+nm_var = "S_cap"
+nm_fac = "NB_cap"
+nm_sel = "sel_flat"
+type = "flat"
 ```
 
 LMOK fonctions
 
 ```{r LMOK_init, echo = TRUE, eval=TRUE}
-source(file = "./functions_kriging.R")
 source(file = "./functions_spde.R")
+source(file = "./functions_draw_data.R")
 source(file = "./functions_Xval.R")
 ```
 
-# Estimation des paramètres par MLL
+```{r}
+load(file = "../Data/CCR_69.Rdata")
+dat = db.add(dat, tempsel = C1NATURE == ifelse(type=="flat",2,1))
+dat = db.rename(dat,"tempsel",nm_sel)
 
-Modèle mono-variable de la surface $S$ des biens de type (a) avec deux facteurs $1$ et $N$.
+dat = db.add(dat,Un = 1.)
 
-$$
-S_k = Z_1(s_k) \times 1 + Z_2(s_k) \times N_k + \epsilon_k
-$$
+```
 
-Les paramètres spatiaux du modèle linéaire $(Z_1, Z_2)$ sont en corégionalisation intrinsèque:
+#Definition du modèle
 
-$$
- \{Cov((Z_i(s), Z_j(s')\}_{i,j \in 1:2} = 
- \begin{pmatrix}
- \sigma_1^2            & \sigma_1\sigma_2\tau \\
- \sigma_1\sigma_2\tau  & \sigma_2^2
- \end{pmatrix} \times K_{\nu} \left(\frac{|s-s'|}{a}\right)
-$$
 
-Les paramètres du modèles sont donc:
+```{r Model_init, echo = TRUE, eval = TRUE}
+# Paramètres du modèle
 
-* les écarts types et le coefficient de corrélation, $(\sigma_1, \sigma_2, \tau)$
-* la partée de la covariance de Matern, $a$
-* l'écart type de l'erreur de mesure variances et covariances, $\sigma$
+nu      <- 1        # Coefficient de la covariance de Matern
+nodes   <- c(100,100) # Valeur par default pour le meshing
+margin  <- 0.2      # Proportion pour l'extension de la zone à mailler
 
-Le paramètre de régularité de la covariance de Matern est fixée $\nu = 3$.
 
-La fonction d'initialisation d'un modèle LMOK à partir d'un vecteur de paramètres est définie:
-$$ x = (\sigma_1, \sigma_2, \tau, a, \sigma)$$
+# required in SPDE_LMOK_init_geometry if mesh not provided
+param <- list(margin = margin, nodes = nodes, nu = nu)
+
+
+```
+
+
+
 ```{r MLOK_MLL_ini, echo=TRUE, eval=TRUE}
+
+param_ini <- list(nodes   = nodes, margin  = margin,
+  type = "IndFac", 
+  nu = nu,
+  sigma_0 = 10,
+  sigma_1 = 10,
+  sigma   = 10,
+  range_0 = 10000,
+  range_1 = 10000
+)
+
 #' ------------------------------------------------------------
 #'  Auxiliary function: BiInt (intrinsic coregionalisation of the two factors)
 #' x[1] = sigma_1 (Standard deviation of Z_1)
-#' x[2] = sigma_2 (Standard deviation of Z_2)
-#' x[3] = tau     (correlation coefficient between the two factors)
-#' x[4] = range   (Practical range of the factors)
+#' x[2] = range_1 (Practical range of Z_1)
+#' x[3] = sigma_2 (Standard deviation of Z_2)
+#' x[4] = range_1 (Practical range of Z_2)
 #' x[5] = sigma   (Standard deviation of the measurement error)
 #' ------------------------------------------------------------
-create_model_BiFInt <- function(x, verbose = TRUE){
+create_model_flat_indep <- function(x, verbose = TRUE){
   nu = param$nu
-  c0 <- matrix(c(x[1]^2, rep(prod(x[1:3]), 2), x[2]^2), 2, 2)
-  model <- model.create(8, range = x[4], sill = c0)
+  c0 <- matrix(c(x[1]^2, rep(0,3)),nrow=2)
+  model <- model.create(8, range = abs(x[2]), sill = c0)
+  c1 <- matrix(c(rep(0,3),x[3]^2),nrow=2)
+  model <- model.create(8, range = abs(x[4]), sill = c1,model=model)
   if (verbose){
     print(model)
     print(paste0("sigma = ", x[5]))
@@ -123,9 +102,23 @@ create_model_BiFInt <- function(x, verbose = TRUE){
   list(model = model, sigma = x[5])
 }
 
+x_ini_flat_indep = c(param_ini$sigma_0,param_ini$range_0,param_ini$sigma_1,param_ini$range_1,param_ini$sigma)
+
+cont_flat_indep = list(fnscale = 1,parscale = c(1,100000,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=200,REPORT=1)
+
+```
+
+
+```{r}
+cont = cont_flat_indep
+x_ini = x_ini_flat_indep
+modelMulti = create_model_flat_indep
+```
+
+```{r}
+
 # illustration avec les paramètres de simulation
-x <- c(param_CoefBi$coef_1, param_CoefBi$range[1], param_CoefBi$sigma[1]) 
-create_model_BiFInt(x, verbose = TRUE)
+modelMulti(x_ini, verbose = TRUE)
 
 # re-initialisation de la base de données
 dat  <- db.locerase(dat, "z")
@@ -136,20 +129,19 @@ dat  <- db.delete(dat, "sigma2")
 # Selection des variables
 dat <- db.locate(dat, name = c("Un", nm_fac), loctype = "f", flag.locnew = TRUE)
 dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
+dat = db.locate(dat,nm_sel,"sel")
+#dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
 
 # Creation of the function computing the log-likelihood
-fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = create_model_BiFInt, verbose = FALSE)
-fn_MLL(x, verbose = FALSE)
+fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = modelMulti, verbose = FALSE)
+# Valeurs à l'initialisation
+fn_MLL(x_ini, verbose = TRUE)
 ```
 
 Optimisation de la vraisemblance
 
 ```{r LMOK_MLL, eval=TRUE, echo=FALSE}
-# Valeurs à l'initialisation
-x_ini <- x
-fn_MLL(x_ini, verbose = TRUE)
-# res   <- optim(par = x_ini, fn = fn_MLL, verbose=F, method="BFGS", control = cont)
+res   <- optim(par = x_ini, fn = fn_MLL, verbose=F, method="Nelder-Mead", control = cont)
 # x_est <- res$par
 x_est <- x_ini
 

@@ -1,0 +1,233 @@
+---
+  title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - MONO-FACTEUR - Département du Rhône"
+  author: "X. Freulon, N. Desassis, H. Wackernagel"
+  date: "31 juillet 2022"
+  output:
+    pdf_document: default
+    html_document: default
+---
+  
+# Introduction
+
+# Initialisation
+  
+```{r setup, include=FALSE, eval=TRUE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RGeostats)
+library(Matrix)
+rm(list=ls())
+constant.define("asp",1)
+set.seed(seed=125875)
+```
+
+
+```{r defining_variable, echo=TRUE, eval=TRUE}
+nm_X   <- "NB_cap"  # Variable explicative
+nm_Y   <- "S_cap"   # Variable à prédire
+nm_T   <- "A"       # Type de biens traités (Maison ou Appartement)
+nm_sel <- paste0("sel_", nm_T)
+nm_sel_train <- paste0(nm_sel, "_train")
+nm_sel_test  <- paste0(nm_sel, "_test")
+```
+
+Initialisation de fonctions utiles pour le krigeage
+
+```{r kriging_LM_fun, eval=TRUE}
+source(file = "./functions_draw_data.R")
+```
+
+
+
+## Données RGeostats
+
+```{r data_loading, echo=TRUE, eval=TRUE}
+load(file = "../Data/CCR_data_Rhone.Rdata")
+area_nm <- "Rhône"
+```
+
+```{r fn_limites, echo=FALSE, eval=TRUE}
+# Des fonctions de dessin pour les departements et les préfectures
+drawDept <- function(departements, idx = NA, flag.add = FALSE, flag.name=TRUE, col = "red"){
+  if(is.na(idx)) {idx <- (1:length(departements))}
+  for (i in seq_along(idx)){
+    plot(departements[[i]]$polygon, add = flag.add)
+    if(flag.name){
+      points(departements[[i]]$city_xy[1], departements[[i]]$city_xy[2], pch = 19, col = col)
+      text(
+        departements[[i]]$city_xy[1], 
+        departements[[i]]$city_xy[2]+5000, 
+        departements[[i]]$city, col = col)
+    }
+  }
+  NULL
+}
+
+boundingboxDept <- function(departements, idx = NA){
+  bb <- matrix(NaN, 2,2)
+  if(is.na(idx)) {idx <- (1:length(departements))}
+  for (i in seq_along(idx)){
+    b <- departements[[i]]$polygon$limits
+    if (i == 1) {bb <- b} 
+    else {
+      bb[1,1] <- min(bb[1,1], b[1,1])
+      bb[1,2] <- min(bb[1,2], b[1,2])
+      bb[2,1] <- max(bb[2,1], b[2,1])
+      bb[2,2] <- max(bb[2,2], b[2,2])
+      }
+    }
+  colnames(bb) <- c("X","Y")
+  rownames(bb) <- c("Min","Max")
+  bb
+}
+```
+
+# Limites géographiques de l'analyse
+
+```{r test_limites, echo = TRUE, eval = FALSE}
+# Carte #1
+bb <- boundingboxDept(dpts)
+plot(NULL, NULL, xlim = bb[,1], ylim = bb[,2], xlab = "Easting", ylab = "Northing")
+drawDept(departements = dpts, col = "skyblue", flag.add = TRUE)
+# Carte #2
+grd <- db.grid.init(polygon, dcell = c(1000, 1000), margin = 10)
+plot(grd)
+drawDept(departements = dpts, flag.add = TRUE, col = "red", flag.name = TRUE)
+```
+
+# Résumé des données CCR
+
+Tables donnant par départements et par natures (maisons et appartements) de la proportion déchantillons informes pour les deux variables d'intéret (nombre de pièces et surface).
+
+```{r table_data, echo=FALSE, eval=TRUE}
+dpts_nm <- NULL
+for (i in seq_along(dpts)){dpts_nm <- c(dpts_nm, dpts[[i]]$name)}
+compute_stat <- function(type = NA){
+  tab <- matrix(NA, nrow = length(dpts) + 1, ncol = 4)
+  sel_nature <- rep(TRUE, nrow(DAT))
+  if(!is.na(type)){
+    sel_nature[DAT$C1NATURE != type] <- FALSE
+  }
+  for (i  in seq_along(dpts)){
+    sel <- sel_nature & (floor(DAT$COM_INSEE/1000) == dpts[[i]]$idx)
+    tab[i,] <- c(
+      nrow(DAT[sel,]),                       # Nombre total de biens
+      sum(!is.na(DAT[sel,"N4NBPIEC"])),      # Nombre de biens avec nombre de pièces informé
+      sum(!is.na(DAT[sel,"N4SURFAC"])),      # Nombre de biens avec surface informée
+      sum((!is.na(DAT[sel,"N4NBPIEC"]))& (!is.na(DAT[sel,"N4SURFAC"]))) 
+      )
+    }
+  tab[length(dpts)+1, ] <- apply(tab, MARGIN = 2, FUN = "sum", na.rm =  TRUE)
+  tab[,2] <- tab[,2]/tab[,1]*100
+  tab[,3] <- tab[,3]/tab[,1]*100
+  tab[,4] <- tab[,4]/tab[,1]*100
+  rownames(tab) <- c(dpts_nm, "Total")
+  colnames(tab) <- c("Number", "% Room Number", "% Surface", "% Room Number and Surface")
+  tab  
+}
+
+knitr::kable(compute_stat(), digits = 1, caption = "Proportion des variables definies pour tous les biens")
+knitr::kable(compute_stat(type = 1), digits = 1, caption = "Proportion des variables definies pour tous les maisons")
+knitr::kable(compute_stat(type = 2), digits = 1, caption = "Proportion des variables definies pour tous les appartements")
+```
+
+On a peu 80% des biens pour les quels le nombre de pièces est défini mais uniquement 15% avec la surface et nombre de pièces disponibles. Donc les cartes des coefficients seront établies sur 15% des données correctement informées et utilisables sur 80% de la base.
+
+Reste à faire un QC des variables : nombre de pièces et surface raisonnables.
+
+```{r QC_data_CCR, echo=FALSE, eval=TRUE}
+fac_dept <- as.factor(floor(DAT$COM_INSEE/1000))
+ll_dpt <- rep("Not Defined", 100)
+for(i in seq_along(dpts)){ll_dpt[dpts[[i]]$idx] <- dpts[[i]]$name }
+
+# Maisons
+tab <- as.matrix(round(100*cumsum(table(DAT$N4NBPIEC[(DAT$C1NATURE == 1)&(DAT$N4NBPIEC < 100)]))/sum(table(DAT$N4NBPIEC[(DAT$C1NATURE == 1)&(DAT$N4NBPIEC < 100)])),digits = 2))
+colnames(tab) <- c("Pourcentage")
+knitr::kable(tab, caption = "Proportion des maisons cumulée en fonction du nombre de pièces")
+# Appartements
+tab <- as.matrix(round(100*cumsum(table(DAT$N4NBPIEC[(DAT$C1NATURE == 2)&(DAT$N4NBPIEC < 100)]))/sum(table(DAT$N4NBPIEC[(DAT$C1NATURE == 2)&(DAT$N4NBPIEC < 100)])),digits = 2))
+colnames(tab) <- c("Pourcentage")
+knitr::kable(tab, caption = "Proportion des appartements cumulée en fonction du nombre de pièces")
+```
+
+Selection des biens avec un nombre de pièces <= 20
+
+```{r subset CCR, eval=TRUE, echo=T}
+# Capping mono-variable par le quantile 98%
+Q98_M_NB   <- quantile(DAT$N4NBPIEC[DAT$C1NATURE == 1], probs = 0.98, na.rm = TRUE)
+Q98_A_NB   <- quantile(DAT$N4NBPIEC[DAT$C1NATURE == 2], probs = 0.98, na.rm = TRUE)
+Q98_M_S    <- quantile(DAT$N4SURFAC[DAT$C1NATURE == 1], probs = 0.98, na.rm = TRUE)
+Q98_A_S    <- quantile(DAT$N4SURFAC[DAT$C1NATURE == 2], probs = 0.98, na.rm = TRUE)
+NB_cap     <- rep(NaN, nrow(DAT))
+NB_cap[DAT$C1NATURE == 1] <- pmin(DAT$N4NBPIEC[DAT$C1NATURE == 1], Q98_M_NB)
+NB_cap[DAT$C1NATURE == 2] <- pmin(DAT$N4NBPIEC[DAT$C1NATURE == 2], Q98_A_NB)
+S_cap     <- rep(NaN, nrow(DAT))
+S_cap[DAT$C1NATURE == 1] <- pmin(DAT$N4SURFAC[DAT$C1NATURE == 1], Q98_M_S)
+S_cap[DAT$C1NATURE == 2] <- pmin(DAT$N4SURFAC[DAT$C1NATURE == 2], Q98_A_S)
+DAT <- cbind(DAT, NB_cap, S_cap)
+
+tab <- matrix(c(Q98_M_NB, Q98_M_S, Q98_A_NB, Q98_A_S), 2,2, byrow = TRUE)
+colnames(tab) <- c(nm_X, nm_Y)
+rownames(tab) <- c("Maisons", "Appartements")
+knitr::kable(tab, caption = "Valeurs des seuils d'écrêtage (Quantile 98%)")
+```
+
+
+```{r data_selection_CCR, echo=TRUE, eval=TRUE}
+# Selection des variables (la contrainte NB <= 20 n'est pas active si la variable est écrètée)
+sel    <- is.na(DAT[, nm_X])==FALSE & is.na(DAT[,nm_Y])==FALSE & DAT[,nm_X] <= 20
+LSUB   <- DAT[sel,]
+f_dpts<- as.factor(floor(LSUB$COM_INSEE/1000))
+tab <- table(f_dpts , LSUB$C1NATURE)
+tab <- cbind(tab, apply(tab, MARGIN = 1, FUN = "sum"))
+tab <- rbind(tab, apply(tab, MARGIN = 2, FUN = "sum"))
+colnames(tab) <- c("Maison", "Appartement", "Total")
+rownames(tab) <- c(ll_dpt[as.numeric(rownames(tab))[-length(rownames(tab))]], "Total")
+knitr::kable(tab, caption = "Nombre de biens utilisés pour l'inférence du modèle")
+```
+
+## Definition des bases d'entrainement et de test
+
+```{r training_dat, echo=FALSE, eval=TRUE}
+
+# Selection des échantillons d'apprentissage et de test
+trainProp <- 0.9 #proportion de données d'apprentissage
+idx_test  <- sort(sample(x = 1:nrow(LSUB), size = floor((1-trainProp)*nrow(LSUB)),replace = FALSE))
+sel_train <- rep(TRUE, nrow(LSUB))
+sel_train[idx_test] <- FALSE
+
+# Statistiques sur les bases
+tab <- table(f_dpts, sel_train)
+tab <- cbind(tab, apply(tab, MARGIN = 1, FUN = "sum"))
+tab <- rbind(tab, apply(tab, MARGIN = 2, FUN = "sum"))
+colnames(tab) <- c("Test", "Training", "Total")
+rownames(tab) <- c(ll_dpt[as.numeric(rownames(tab))[-length(rownames(tab))]], "Total")
+knitr::kable(tab, caption = "Répartition Test/Training par départements - Tous biens")
+
+# Selection des maisons
+sel_house <- (LSUB$C1NATURE == 1)
+tab <- table(f_dpts[sel_house], sel_train[sel_house])
+tab <- cbind(tab, apply(tab, MARGIN = 1, FUN = "sum"))
+tab <- rbind(tab, apply(tab, MARGIN = 2, FUN = "sum"))
+colnames(tab) <- c("Test", "Training", "Total")
+rownames(tab) <- c(ll_dpt[as.numeric(rownames(tab))[-length(rownames(tab))]], "Total")
+knitr::kable(tab, caption = "Répartition Test/Training par départements - Maisons")
+
+# Selection des appartements
+sel_house <- (LSUB$C1NATURE == 2)
+tab <- table(f_dpts[sel_house], sel_train[sel_house])
+tab <- cbind(tab, apply(tab, MARGIN = 1, FUN = "sum"))
+tab <- rbind(tab, apply(tab, MARGIN = 2, FUN = "sum"))
+colnames(tab) <- c("Test", "Training", "Total")
+rownames(tab) <- c(ll_dpt[as.numeric(rownames(tab))[-length(rownames(tab))]], "Total")
+knitr::kable(tab, caption = "Répartition Test/Training par départements - Appartements")
+
+```
+
+Save in RData
+
+```{r}
+dat = db.create(LSUB)
+dat = db.locate(dat,c("X_TEMP","Y_TEMP"),"x")
+save(list=c("dat","dpts"),file="../Data/CCR_69.Rdata")
+```
+
