@@ -137,7 +137,7 @@ SPDE_LMOK_kfold_results <- function(dbin, name_real, name_esti, stats = c("numbe
 SPDE_kfold_results <- function(dbin, name_real, name_esti, stats = c("number", "mean", "MAE", "RMSE"),
                                radix = "K-fold", flag.fig = TRUE){
 res <- as.matrix(db.extract(dbin, names = c(name_real, name_esti), flag.compress = TRUE))
-stopifnot(dim(res)[2] == 2)
+#stopifnot(dim(res)[2] == 2)
 # functions to be defined
 number <- function(u){sum(!is.na(u))}
 MAE    <- function(u){mean(abs(u), na.rm = TRUE)}

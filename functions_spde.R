@@ -287,11 +287,11 @@ SPDE_LMOK_init_MLL <- function(dbin, param2model, mesh = NA, verbose = TRUE){
     for (i in seq_along(mod$items)){
       detQi <- 2 * determinant(Cholesky(mod$items[[i]]$Q,LDL=F),logarithm = T)$modulus[1]
       detMi <- log(det(mod$items[[i]]$M))
-      detSigma <- detSigma - 2 * detQi - nrow(mod$items[[i]]$Q) * detMi
+      detSigma <- detSigma - nrow(mod$item[[i]]$M) * detQi - nrow(mod$items[[i]]$Q) * detMi
     }
     detSigma <- detSigma - sum(log(diag(mod$D)))
     ll_val <- ll_val -1/2 * detSigma
-    return(ll_val)
+    return(-ll_val)
   }
   return(fn_LL)
 }

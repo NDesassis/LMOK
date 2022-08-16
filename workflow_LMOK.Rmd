@@ -106,6 +106,7 @@ x_ini_flat_indep = c(param_ini$sigma_0,param_ini$range_0,param_ini$sigma_1,param
 
 cont_flat_indep = list(fnscale = 1,parscale = c(1,100000,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=200,REPORT=1)
 
+namesParam_flat_indep = c("sigma_1", "range_1", "sigma_2", "range_2", "sigma")
 ```
 
 
@@ -113,6 +114,7 @@ cont_flat_indep = list(fnscale = 1,parscale = c(1,100000,1,100000,1), ndeps=rep(
 cont = cont_flat_indep
 x_ini = x_ini_flat_indep
 modelMulti = create_model_flat_indep
+namesParam = namesParam_flat_indep
 ```
 
 ```{r}
@@ -142,16 +144,17 @@ Optimisation de la vraisemblance
 
 ```{r LMOK_MLL, eval=TRUE, echo=FALSE}
 res   <- optim(par = x_ini, fn = fn_MLL, verbose=F, method="Nelder-Mead", control = cont)
-# x_est <- res$par
-x_est <- x_ini
+
+x_est <- res$par
+#x_est <- x_ini
 
 tab <- rbind(x_ini, x_est)
-colnames(tab) <- c("sigma_1", "sigma_2", "tau", "a", "sigma")
+colnames(tab) <- namesParam
 rownames(tab) <- c("Initial", "Final")
 knitr::kable(round(tab,2), caption = "Maximum de vraisemblance")
 
 # creation of the model and measurement error variable
-res   <- create_model_BiFInt(x_est, verbose = TRUE)
+res   <- modelMulti(x_est, verbose = TRUE)
 m_est <- res$model
 dat   <- db.delete(dat, names = "sigma2") # To prevent duplicate
 dat   <- db.add(dat, sigma2  =  res$sigma^2)
@@ -171,20 +174,21 @@ dat <- db.locerase(dat, loctype = "sel")
 dat <- db.locate(dat, names = nm_var, loctype = "z", flag.locnew = TRUE)
 dat <- db.locate(dat, names = c("Un", nm_fac), loctype = "f", flag.locnew = TRUE)
 dat <- db.locate(dat, names = "sigma2", loctype = "v", flag.locnew = TRUE)
+dat = db.locate(dat,nm_sel,"sel")
 
 # calcul de la validation par K-fold
-dat <- SPDE_LMOK_kfold_compute(dat, model = m_est, verbose = TRUE, radix = "kfold")
+datXval <- SPDE_LMOK_kfold_compute(dat, model = m_est, verbose = TRUE, radix = "kfold")
 
 # calcul de la validation par K-fold
-tab <- SPDE_LMOK_kfold_results(dat, name_real = "a.S", name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- SPDE_LMOK_kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
 # Map of the absolute value of the validation residual
-dat <- db.add(dat, AResidual = abs(dat[,"a.S"] - dat[,"kfold.S.estim"]))
+datXval <- db.add(datXval, AResidual = abs(dat[,nm_var] - dat[,"kfold.S.estim"]))
 
 # The map is computed on a regular grid 1x1 km^2
-dat.grd <- db.grid.init(dat, dcell = rep(0.1, 2))
-dat.grd <- db.stat.grid(dat, dat.grd, fun = "mini")
+dat.grd <- db.grid.init(datXval, dcell = rep(0.1, 2))
+dat.grd <- db.stat.grid(datXval, dat.grd, fun = "mini")
 dat.grd <- db.rename(dat.grd, names = "Stats.AResidual", newnames = "Minimum of residual")
 plot(dat.grd, pos.legend = 3)
 # data cleaning
