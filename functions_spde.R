@@ -58,7 +58,7 @@ SPDE_LMOK_init_geometry <- function(dbin, mesh = NA, verbose = TRUE){
   }
   n.mesh <- mesh$npoints
   
-  # Input data (active selection & factors & observation & measurement error)
+  # Input data (active selection & factors & observation)
   X  <- as.matrix(db.extract(dbin, names = idx_in_f, flag.compress = TRUE))
   Y  <- db.extract(dbin, names = idx_in_z, flag.compress = TRUE)
 

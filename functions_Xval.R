@@ -46,9 +46,11 @@ SPDE_LMOK_kfold_compute <- function(dbin, model,  mesh = NA,
     print(paste0("K-fold: K = ", K))
   }
   
-  Z1_estim <- rep(NaN, dbin$nech)
-  Z2_estim <- rep(NaN, dbin$nech)
-  
+  estim <- list()
+  for (i in seq_along(idx_in_f)){
+    estim[[1+length(estim)]] <- list(Z = rep(NaN, dbin$nech))
+  }
+
   for (c in l_folds){
     sel_in  <- sel & (!is.na(folds))&(folds != c)
     sel_out <- sel & (!is.na(folds))&(folds == c)
@@ -60,11 +62,19 @@ SPDE_LMOK_kfold_compute <- function(dbin, model,  mesh = NA,
       dbin  = db.sel(dbin, sel_in),
       dbout = db.sel(dbin, sel_out), 
       model = model, mesh = mesh, nsim = 0, radix = radix)
-    Z1_estim[sel_out] <- db.extract(res, paste(radix, "Z1", "estim", sep = "."), flag.compress = TRUE)
-    Z2_estim[sel_out] <- db.extract(res, paste(radix, "Z2", "estim", sep = "."), flag.compress = TRUE)
+    
+    for (i in seq_along(idx_in_f)){
+      estim[[i]]$Z[sel_out] <- db.extract(res, paste(radix, paste0("Z", i), "estim", sep = "."), 
+                                          flag.compress = TRUE)
+      }
   }
-  
-  S_estim <- Z1_estim * dbin[,idx_in_f[1]] + Z2_estim * dbin[,idx_in_f[2]]
+  S_estim <- rep(0.0, dbin$nech)
+  for (i in seq_along(idx_in_f)){
+    S_estim <- S_estim + estim[[i]]$Z * dbin[,idx_in_f[i]]
+    dbin <- db.add(dbin, 
+                   names = paste(radix, paste0("Z", i), "estim", sep = "."),
+                   estim[[i]]$Z)
+  }
   db.add(dbin, names = paste(radix, "S", "estim", sep = "."), S_estim)
 }
 

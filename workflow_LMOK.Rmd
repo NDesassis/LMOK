@@ -46,14 +46,11 @@ n.fold = 10 # Number of folds for the cross-validation
 nm_var = "S_cap"
 nm_fac = "NB_cap"
 nm_type = "C1NATURE"
-nm_sel = "sel_flat"
 
 # Choose model type among the next combinations
-
-#source("./M1.R");type = "flat"
-#source("./M1.R");type = "house"
-
-source("./M3.R");type = "both"
+#source("./M1.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M1"
+#source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
+source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
 ```
 
 LMOK fonctions
@@ -83,7 +80,6 @@ plot(poly,add=T)
 
 
 ```{r}
-
 # illustration avec les paramètres de simulation
 modelMulti(x_ini, verbose = TRUE)
 
@@ -124,15 +120,34 @@ Le nombre de *folds* est fixé à $K$.
 
 ```{r LMOK_kfold, echo=TRUE, eval=TRUE}
 # Creation of the folds for the cross-validation
-dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type,resModel$sigma)
+dat = prepareDb(dat, 
+                nm_fac = nm_fac,
+                nm_var = nm_var, 
+                nm_sel = nm_sel,
+                nm_type = nm_type,
+                type = type,
+                sigma = resModel$sigma)
 datXval <- db.add(dat, folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE))
-
+datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
+datXval <- db.locate(datXval, names = nm_var, loctype = "z", flag.locnew = TRUE)
 
 # calcul de la validation par K-fold
 datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = TRUE, radix = "kfold", mesh = mesh)
 
 # calcul de la validation par K-fold
 tab <- SPDE_LMOK_kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+
+# if the Xval is computed on house and flat (model M3)
+if(length(db.getcols(datXval, "f")) > 2){
+  for (i in 1:2){
+    tab <- rbind(tab,
+                 SPDE_LMOK_kfold_results(
+                   db.sel(datXval, combine = "and", datXval[,nm_type] == i),
+                   name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+                 )
+  }
+}
+
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
 # Map of the absolute value of the validation residual
@@ -151,22 +166,18 @@ plot(dat.grd, pos.legend = 3)
 Toutes les données disponibles sont maintenant utilisées.
 
 ```{r LMOK_eval, echo=TRUE, eval=TRUE}
-# re-initialisation
-dat  <- db.locerase(dat, "sel")
-dat  <- db.locerase(dat, "z")
-dat  <- db.locerase(dat, "f")
-dat  <- db.locerase(dat, "v")
-dat  <- db.locerase(dat, "code")
-
-# Selection des variables
-dat <- db.locate(dat, name = c("Un", nm_fac), loctype = "f", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
-dat <- db.locate(dat, name = c("sigma2"), loctype = "v", flag.locnew = TRUE)
-dat = db.locate(dat,nm_sel,"sel")
-
-grd = db.grid.init(dat,nodes=c(200,200))
-grd=db.polygon(grd,dpts[[1]]$polygon )
-pref<- paste(nm_var, "Int", sep = ".")
+# Initialisation
+dat = prepareDb(dat, 
+                nm_fac = nm_fac,
+                nm_var = nm_var, 
+                nm_sel = nm_sel,
+                nm_type = nm_type,
+                type = type,
+                sigma = resModel$sigma)
+# Output file
+grd <- db.grid.init(dat,nodes=c(200,200))
+grd <- db.polygon(grd,dpts[[1]]$polygon )
+pref<- paste(nm_var, nm_model, sep = ".")
 grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = mesh,
                     nsim = 0, seed = NA, flag.ce = FALSE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
@@ -179,16 +190,13 @@ grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = mesh,
 # Presentation des résultats
 
 ```{r LMOK_results, echo=TRUE, eval=TRUE}
+nf <- length(db.getcols(dat, loctype = "f"))
+for (i in 1:nf) {
 # map of the estimated values
-plot(grd, name = paste("SPDE_LMOK", pref, "Z1", "estim", sep = "."))
-#plot(dat, name = nm_var, add = TRUE)
-plot(grd, name = paste("SPDE_LMOK", pref, "Z2", "estim", sep = "."), pos.legend = 8)
-#plot(dat, name = nm_var, add = TRUE)
+plot(grd, name = paste("SPDE_LMOK", pref, paste0("Z",i), "estim", sep = "."), pos.legend = 8)
 # map of the standard deviation of the estimation error
-plot(grd, name = paste("SPDE_LMOK", pref, "Z1", "ce.stdev", sep = "."), pos.legend = 8)
-#plot(dat, name = nm_var, add = TRUE)
-plot(grd, name = paste("SPDE_LMOK", pref, "Z2", "ce.stdev", sep = "."), pos.legend = 8)
-#plot(dat, name = nm_var, add = TRUE)
+plot(grd, name = paste("SPDE_LMOK", pref, paste0("Z", i), "ce.stdev", sep = "."), pos.legend = 8)
+}
 # statistics
 tab <- db.stat.multi(grd, names = "SPDE_LMOK.*")
 knitr::kable(round(tab,2), caption = "Estimation des coefficients")

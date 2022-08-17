@@ -68,7 +68,7 @@ x_ini=c(param_ini$sigma_0a,
         param_ini$sigma_b
 )
 
-cont = list(fnscale = 1,parscale = c(1,1,1,1,1,1,10000,10000,1,1), ndeps=rep(1,10)*1e-4,trace = 1, maxit=200,REPORT=1)
+cont = list(fnscale = 1,parscale = c(1,1,1,1,1,1,10000,10000,1,1), ndeps=rep(1,10)*1e-4,trace = 1, maxit=1,REPORT=1)
 
 namesParam =  c("sigma_0a",
                 "sigma_0b",
