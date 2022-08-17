@@ -35,11 +35,5 @@ prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,sigma=1)
   dat = db.locate(dat,nm_sel,"sel")
   # target variable     
   dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
-<<<<<<< HEAD
-
- dat = db.add(dat,sigma2v,loctype = "v")
-  #dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
-=======
->>>>>>> 269ca19d4a46fc4c05021ca20985e5649af8074b
   return(dat)
 }
