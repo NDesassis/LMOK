@@ -37,6 +37,7 @@ param <- list(margin = margin, nodes = nodes, nu = nu)
 
 ```{r}
 set.seed(seed=125875)
+
 nsim = 1000 # Number of simulations to compute CE
 np = 100    # Number of samples in the training data base
 n.fold = 10 # Number of folds for the cross-validation
@@ -64,6 +65,7 @@ source(file = "./prepareDb.R")
 ```{r}
 load(file = "../Data/CCR_69.Rdata")
 dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 
 #Definition du modèle
@@ -126,7 +128,7 @@ dat = prepareDb(dat,
                 nm_type = nm_type,
                 type = type,
                 sigma = resModel$sigma)
-datXval <- db.add(dat, folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE))
+datXval <- db.add(dat, folds)
 datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
 datXval <- db.locate(datXval, names = nm_var, loctype = "z", flag.locnew = TRUE)
 
