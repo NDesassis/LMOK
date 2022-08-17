@@ -24,7 +24,11 @@ prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,sigma2=1)
     N.b  <- dat[,nm_fac]; N.b[dat[,nm_type] != 2] <- 0.0 
     dat <- db.add(dat, Un.a, Un.b, N.a, N.b,loctype="f")
     dat <- db.locate(dat, names = nm_type, loctype = "code", flag.locnew = TRUE)
-    
+    if (length(sigma2) > 1){
+      idx_in_c <- db.getcols(dat, loctype = "code", rank.match = 1)
+      code <- db.extract(dbin, names = idx_in_c, flag.compress = TRUE)
+      sigma2v <- sigma2[code]
+    }
   }
   
   
@@ -34,7 +38,7 @@ prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,sigma2=1)
                   
   dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
 
- dat = db.add(dat,sigma2,loctype = "v")
+ dat = db.add(dat,sigma2v,loctype = "v")
   #dat <- db.locate(dat, name = c("sel_train"), loctype = "sel", flag.locnew = TRUE)
   return(dat)
 }
