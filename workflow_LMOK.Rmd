@@ -30,11 +30,8 @@ nu      <- 1        # Coefficient de la covariance de Matern
 nodes   <- c(100,100) # Valeur par default pour le meshing
 margin  <- 0.2      # Proportion pour l'extension de la zone à mailler
 
-
 # required in SPDE_LMOK_init_geometry if mesh not provided
 param <- list(margin = margin, nodes = nodes, nu = nu)
-
-
 ```
 
 
@@ -50,7 +47,9 @@ nm_type = "C1NATURE"
 # Choose model type among the next combinations
 #source("./M1.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M1"
 #source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
-source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
+# source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
+source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
+#source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
 ```
 
 LMOK fonctions
