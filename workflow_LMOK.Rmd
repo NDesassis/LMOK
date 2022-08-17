@@ -49,8 +49,11 @@ nm_type = "C1NATURE"
 #source("./M1.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M1"
 #source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
  source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
-#source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
+# source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
 #source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
+# source("./Mono.R");type = "mono_flat"; nm_sel = "sel_flat";nm_model = "flat_Mono"
+# source("./Mono.R");type = "mono_house"; nm_sel = "sel_house";nm_model = "house_Mono"
+source("./MonoBivar.R");type = "mono_bivar"; nm_sel = "sel_both";nm_model = "MonoBivar"
 ```
 
 LMOK fonctions
@@ -86,7 +89,7 @@ modelMulti(x_ini, verbose = TRUE)
 
 
 # Creation of the function computing the log-likelihood
-fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = modelMulti, verbose = FALSE,mesh=mesh)
+fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = modelMulti, verbose = TRUE,mesh=mesh)
 # Valeurs à l'initialisation
 fn_MLL(x_ini, verbose = TRUE)
 ```
@@ -139,7 +142,7 @@ datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = TRUE, radix
 tab <- SPDE_LMOK_kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 
 # if the Xval is computed on house and flat (model M3)
-if(length(db.getcols(datXval, "f")) > 2){
+if(length(db.getcols(datXval, "f")) >= 2){
   for (i in 1:2){
     tab <- rbind(tab,
                  SPDE_LMOK_kfold_results(
@@ -174,7 +177,8 @@ dat = prepareDb(dat,
                 nm_sel = nm_sel,
                 nm_type = nm_type,
                 type = type,
-                sigma = resModel$sigma)
+                sigma = resModel$sigma
+                )
 # Output file
 grd <- db.grid.init(dat,nodes=c(200,200))
 grd <- db.polygon(grd,dpts[[1]]$polygon )
