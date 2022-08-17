@@ -23,11 +23,11 @@ prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,sigma=1)
     Un.b <- as.numeric(dat[,nm_type] == 2)
     N.a  <- dat[,nm_fac]; N.a[dat[,nm_type] != 1] <- 0.0 
     N.b  <- dat[,nm_fac]; N.b[dat[,nm_type] != 2] <- 0.0 
-    dat  <- db.add(dat, Un.a, Un.b, N.a, N.b, loctype="f")
-    dat  <- db.locate(dat, names = nm_type, loctype = "code", flag.locnew = TRUE)
+    dat <- db.add(dat, Un.a, Un.b, N.a, N.b,loctype="f")
+    dat <- db.locate(dat, names = nm_type, loctype = "code", flag.locnew = TRUE)
     dat_sigma <- sigma[dat[, nm_type]]
     dat  <- db.add(dat, sigma2 = dat_sigma^2, loctype = "v")
-    
+
   }
   # selection
   dat = db.add(dat, tempsel = tempsel)
