@@ -48,8 +48,8 @@ nm_type = "C1NATURE"
 # Choose model type among the next combinations
 #source("./M1.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M1"
 #source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
-# source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
-source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
+ source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
+#source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
 #source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
 ```
 

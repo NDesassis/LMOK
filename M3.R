@@ -12,6 +12,21 @@ param_ini <- list(nodes   = nodes, margin  = margin,
                   sigma_a = 20,
                   sigma_b = 20
 )
+
+param_ini <- list(nodes   = nodes, margin  = margin,
+                  type = "IndFac", 
+                  nu = nu,
+                  sigma_0a = 13.4781006,
+                  sigma_0b = 13.9472737,
+                  sigma_1a = 8.7072706,
+                  sigma_1b = 15.7167450,
+                  tau_0  = -0.3230655,
+                  tau_1  = 3.0254948,
+                  range_1 = 99447.8531244,
+                  range_2 = 10785.1443844,
+                  sigma_a = 30.4164438,
+                  sigma_b = 12.0431675
+)
 #' ------------------------------------------------------------
 #' Auxiliary function: bivar (intrinsic coregionalisation of the factors)
 #' Factors: F1 = "indicator of type == a"

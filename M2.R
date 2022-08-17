@@ -29,7 +29,7 @@ modelMulti<- function(x, verbose = TRUE){
 
 x_ini= c(param_ini$sigma_0, param_ini$sigma_1, atanh(param_ini$tau), param_ini$range, param_ini$sigma)
 
-cont = list(fnscale = 1,parscale = c(1,1,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=10,REPORT=1)
+cont = list(fnscale = 1,parscale = c(1,1,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=200,REPORT=1)
 
 
 namesParam = c("sigma_1", "sigma_2", "tau", "range", "sigma")

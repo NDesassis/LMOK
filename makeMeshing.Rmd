@@ -30,7 +30,7 @@ plot(poly,add=T)
 
 ```{r}
 coords = NULL
-lambda = .02
+lambda = .04
 n = rpois(grdCoarse$nech,lambda * grdCoarse[,"Stats.rank"])
 n[grdCoarse[,"Polygon"]==1] = apply(cbind(n[grdCoarse[,"Polygon"]==1],2),1,max)
 n[grdCoarse[,"Polygon"]==0 & grdCoarse[,"morpho"]==1] = 1
