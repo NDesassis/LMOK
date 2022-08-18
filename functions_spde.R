@@ -91,7 +91,7 @@ SPDE_LMOK_init_geometry <- function(dbin, mesh = NA, verbose = TRUE){
   ))
 }
 
-SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = TRUE){
+SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = FALSE){
   
   n.var  <- model$nvar
   n.cova <- model$ncova
@@ -158,7 +158,9 @@ SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = TRUE){
     }
     items[[1+length(items)]] <- list(M = qMi, Q = Qi)
   }
-  print(model)
+  if(verbose){
+    print(model)
+  }
   cholPrec =  Cholesky(prec, LDL=FALSE)
   return(list(
     items    = items,
@@ -198,7 +200,7 @@ SPDE_LMOK_init_spde <- function(geo, mod, verbose = TRUE){
 
 SPDE_LMOK_krigsim <- function(dbout, dbin, model, mesh = NA,
                               nsim = 0, seed = NA, flag.ce = FALSE, 
-                              radix = "SPDE_LMOK", verbose = TRUE){
+                              radix = "SPDE_LMOK", verbose = FALSE){
   
   # measurement error
   sigma <- sqrt(db.extract(dbin, db.getname(dbin, "v", 1), flag.compress = TRUE))
