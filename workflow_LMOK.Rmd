@@ -47,13 +47,13 @@ nm_type = "C1NATURE"
 
 # Choose model type among the next combinations
 #source("./M1.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M1"
-#source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
- source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
+source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
+# source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
 # source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
 #source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
-# source("./Mono.R");type = "mono_flat"; nm_sel = "sel_flat";nm_model = "flat_Mono"
-# source("./Mono.R");type = "mono_house"; nm_sel = "sel_house";nm_model = "house_Mono"
-source("./MonoBivar.R");type = "mono_bivar"; nm_sel = "sel_both";nm_model = "MonoBivar"
+#source("./Mono.R");type = "mono_flat"; nm_sel = "sel_flat";nm_model = "flat_Mono"
+#source("./Mono.R");type = "mono_house"; nm_sel = "sel_house";nm_model = "house_Mono"
+#source("./MonoBivar.R");type = "mono_bivar"; nm_sel = "sel_both";nm_model = "MonoBivar"
 ```
 
 LMOK fonctions
@@ -136,7 +136,7 @@ datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = T
 datXval <- db.locate(datXval, names = nm_var, loctype = "z", flag.locnew = TRUE)
 
 # calcul de la validation par K-fold
-datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = TRUE, radix = "kfold", mesh = mesh)
+datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = FALSE, radix = "kfold", mesh = mesh)
 
 # calcul de la validation par K-fold
 tab <- SPDE_LMOK_kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
