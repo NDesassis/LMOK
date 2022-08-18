@@ -1,4 +1,213 @@
 #'-------------------------------
+#' Generic function to compute the K-fold cross validation with factors
+#'-------------------------------
+#' Two functions compute and results
+#'  - "kfold_compute" computes the xval on the input data base and returns it
+#'  - "kfold_results" presents different figures and return the score table
+#'  
+#'  Required in dbin, locators defined "z", "f1", "code" (f0 is the constant 1.0)
+#'  Optional in dbin, a selection defined (locator "sel")
+#'  
+#'  Example of a function to use SPDE_LMOK_krigsim : model_TBD, mesh_TBD
+#'  
+# fn_estim_SPDE_LMOK <- function(dbin, dbout, radix = "estim_SPDE_LMOK"){
+#   SPDE_LMOK_krigsim(dbin, dbout, 
+#                     model = model_TBD, 
+#                     mesh = mesh_TBD,
+#                     nsim = 0, radix = radix)
+# }
+#'
+
+kfold_compute <- function(dbin, fn_estim, radix = "kfold", verbose = TRUE){
+  idx_in_z <- db.getcols(dbin, loctype = "z")
+  idx_in_f <- db.getcols(dbin, loctype = "f")
+  idx_in_c <- db.getcols(dbin, loctype = "code")
+  idx_in_s <- db.getcols(dbin, loctype = "sel")
+  stopifnot(length(idx_in_z) == 1)
+  stopifnot(length(idx_in_f) >= 1)
+  stopifnot(length(idx_in_c) == 1)
+  
+  folds <- db.extract(dbin, names = idx_in_c, flag.compress = FALSE)
+  if (is.null(idx_in_s)) {sel <- rep(TRUE, dbin$nech)} 
+  else {
+    sel   <- (db.extract(dbin, names = idx_in_s) > 0)
+  }
+  
+  l_folds <- sort(unique(folds[sel]))
+  K <- length(l_folds)
+  
+  if(verbose) {
+    print(paste0("K-fold: cross validation of ", 
+                 names(dbin@items)[idx_in_z], " with factors ",
+                 names(dbin@items)[idx_in_f]
+      )
+    )
+    print(paste0("K-fold: K = ", K))
+  }
+  
+  estim <- list()
+  for (i in seq_along(idx_in_f)){
+    estim[[1+length(estim)]] <- list(Z = rep(NaN, dbin$nech))
+  }
+  
+  for (c in l_folds){
+    sel_in  <- sel & (!is.na(folds))&(folds != c)
+    sel_out <- sel & (!is.na(folds))&(folds == c)
+    
+    if(verbose) {
+      print(paste0("K-fold: processing fold #",c))
+    }
+    res <- fn_estim(
+      dbin  = db.sel(dbin, sel_in),
+      dbout = db.sel(dbin, sel_out),
+      radix = radix)
+    
+    for (i in seq_along(idx_in_f)){
+      estim[[i]]$Z[sel_out] <- db.extract(res, paste(radix, paste0("Z", i), "estim", sep = "."), 
+                                          flag.compress = TRUE)
+    }
+  }
+  S_estim <- rep(0.0, dbin$nech)
+  for (i in seq_along(idx_in_f)){
+    S_estim <- S_estim + estim[[i]]$Z * dbin[,idx_in_f[i]]
+    dbin <- db.add(dbin, 
+                   names = paste(radix, paste0("Z", i), "estim", sep = "."),
+                   estim[[i]]$Z)
+  }
+  db.add(dbin, names = paste(radix, "S", "estim", sep = "."), S_estim)
+}
+
+kfold_results <- function(dbin, name_real, name_esti, 
+                          stats = c("number", "mean", "MAE", "RMSE"),
+                          radix = "K-fold", flag.fig = TRUE){
+  
+  res <- as.matrix(db.extract(dbin, names = c(name_real, name_esti), flag.compress = TRUE))
+  idx_in_c <- db.getcols(dbin, loctype = "code")
+  K <- 0
+  if (!is.null(idx_in_c)){
+    codes    <- db.extract(dbin, names = idx_in_c, flag.compress = TRUE)
+    ll_codes <- sort(unique(codes))
+    K <- length(ll_codes)
+  }
+  
+  # functions to be defined
+  number <- function(u){sum(!is.na(u))}
+  MAE    <- function(u){mean(abs(u), na.rm = TRUE)}
+  RMSE   <- function(u){sqrt(mean(u^2, na.rm = TRUE))}
+  
+  tab <- matrix(NaN, nrow = 1+K, ncol = length(stats))
+  colnames(tab) <- stats
+  rownames(tab) <- c(paste0(names(dbin@items)[idx_in_c], "==", ll_codes), "Total")
+  if (K > 0){
+    for (k in seq_along(ll_codes)){
+      sel <- (codes == ll_codes[k])
+      for (i in seq_along(stats)){
+        tab[k,i] <- apply(X = as.matrix(res[sel,1] - res[sel,2]),  MARGIN = 2, FUN = stats[i])
+      }
+    }
+  }
+  # All selected samples
+  for (i in seq_along(stats)){
+    tab[1+K,i] <- apply(X = as.matrix(res[,1] - res[,2]),  MARGIN = 2, FUN = stats[i])
+  }
+  
+  if(flag.fig){
+    constant.define("asp",1)
+    # figure : actual value vs. estimated value
+    correlation(dbin, name2 = name_real, name1 = name_esti,
+                title = paste0("Cross validation of ", name_real, " - Kriging"),
+                xlab  = "Estimated value", ylab = "Actual value",
+                flag.iso = TRUE, flag.aspoint = ifelse(dbin$nactive > 500, FALSE, TRUE),
+                flag.diag = TRUE, diag.col = "red", diag.lwd = 2,
+                flag.ce = TRUE, ce.col = "blue"
+    )
+    # figure : residual vs. estimated value
+    dbin <- db.add(dbin, Residual = dbin[,name_real] - dbin[,name_esti])
+    correlation(dbin, name2 = "Residual", name1 = name_esti,
+                title = paste0("Cross validation of ", name_real, " - Kriging"),
+                xlab  = "Estimated value", ylab = "Residual",
+                flag.iso = FALSE, flag.aspoint = ifelse(dbin$nactive > 500, FALSE, TRUE),
+                flag.diag = FALSE,
+                flag.ce = TRUE, ce.col = "blue"
+    )
+    abline(h = 0.0, col = "red", lwd = 2)  
+  }
+  tab 
+}
+
+
+#'-------------------------------
+#' Compute the K-fold cross validation (with two factors)
+#'-------------------------------
+#' Two functions compute and results
+#'  - "SPDE_kfold_compute" computes the xval on the input data base and returns it
+#'  - "SPDE_kfold_results" presents different figures and return the score table
+#'  
+#'  Required in dbin, locators defined "z", "f1", "code" (f0 is the constant 1.0)
+#'  Optional in dbin, a selection defined (locator "sel")
+
+SPDE_LMOK_kfold_compute <- function(dbin, model,  mesh = NA, 
+                                    radix = "SPDE_LMOK.kfold", verbose = TRUE){
+  idx_in_z <- db.getcols(dbin, loctype = "z")
+  idx_in_f <- db.getcols(dbin, loctype = "f")
+  idx_in_c <- db.getcols(dbin, loctype = "code")
+  idx_in_s <- db.getcols(dbin, loctype = "sel")
+  stopifnot(length(idx_in_z) == 1)
+  stopifnot(length(idx_in_f) == model$nvar)
+  stopifnot(length(idx_in_c) == 1)
+  
+  folds <- db.extract(dbin, names = idx_in_c, flag.compress = FALSE)
+  if (is.null(idx_in_s)) {sel <- rep(TRUE, dbin$nech)} 
+  else {
+    sel   <- (db.extract(dbin, names = idx_in_s) > 0)
+  }
+  
+  l_folds <- sort(unique(folds[sel]))
+  K <- length(l_folds)
+  
+  if(verbose) {
+    print(paste0("K-fold: cross validation of ", 
+                 names(dbin@items)[idx_in_z], " with factor ",
+                 names(dbin@items)[idx_in_f]
+    )
+    )
+    print(paste0("K-fold: K = ", K))
+  }
+  
+  estim <- list()
+  for (i in seq_along(idx_in_f)){
+    estim[[1+length(estim)]] <- list(Z = rep(NaN, dbin$nech))
+  }
+  
+  for (c in l_folds){
+    sel_in  <- sel & (!is.na(folds))&(folds != c)
+    sel_out <- sel & (!is.na(folds))&(folds == c)
+    
+    if(verbose) {
+      print(paste0("K-fold: processing fold #",c))
+    }
+    res <- SPDE_LMOK_krigsim(
+      dbin  = db.sel(dbin, sel_in),
+      dbout = db.sel(dbin, sel_out), 
+      model = model, mesh = mesh, nsim = 0, radix = radix)
+    
+    for (i in seq_along(idx_in_f)){
+      estim[[i]]$Z[sel_out] <- db.extract(res, paste(radix, paste0("Z", i), "estim", sep = "."), 
+                                          flag.compress = TRUE)
+    }
+  }
+  S_estim <- rep(0.0, dbin$nech)
+  for (i in seq_along(idx_in_f)){
+    S_estim <- S_estim + estim[[i]]$Z * dbin[,idx_in_f[i]]
+    dbin <- db.add(dbin, 
+                   names = paste(radix, paste0("Z", i), "estim", sep = "."),
+                   estim[[i]]$Z)
+  }
+  db.add(dbin, names = paste(radix, "S", "estim", sep = "."), S_estim)
+}
+
+
+#'-------------------------------
 #' Compute the K-fold cross validation (with two factors)
 #'-------------------------------
 #' Two functions compute and results
