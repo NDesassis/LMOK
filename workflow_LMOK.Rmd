@@ -20,49 +20,25 @@ constant.define("asp",1)
 
 ```
 
+
 Paramétrage 
+
+```{r}
+source("conf.R")
+```
+
+
+
 
 
 ```{r Model_init, echo = TRUE, eval = TRUE}
-# Paramètres du modèle
-
-nu      <- 1        # Coefficient de la covariance de Matern
-nodes   <- c(100,100) # Valeur par default pour le meshing
-margin  <- 0.2      # Proportion pour l'extension de la zone à mailler
 
 # required in SPDE_LMOK_init_geometry if mesh not provided
 param <- list(margin = margin, nodes = nodes, nu = nu)
 ```
 
 
-```{r}
-set.seed(seed=125875)
 
-nsim = 1000 # Number of simulations to compute CE
-np = 100    # Number of samples in the training data base
-n.fold = 10 # Number of folds for the cross-validation
-nm_var = "S_cap"
-nm_fac = "NB_cap"
-nm_type = "C1NATURE"
-
-# Choose model type among the next combinations
-#source("./M1.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M1"
-source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
-# source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
-# source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
-#source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
-#source("./Mono.R");type = "mono_flat"; nm_sel = "sel_flat";nm_model = "flat_Mono"
-#source("./Mono.R");type = "mono_house"; nm_sel = "sel_house";nm_model = "house_Mono"
-#source("./MonoBivar.R");type = "mono_bivar"; nm_sel = "sel_both";nm_model = "MonoBivar"
-#source("./M1.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M1"
-source("./M2.R");type = "flat"; nm_sel = "sel_flat"; nm_model = "flat_M2"
-# source("./M2.R");type = "house"; nm_sel = "sel_house"; nm_model = "house_M2"
-#source("./M3.R");type = "both"; nm_sel = "sel_both";nm_model = "M3"
-# source("./Mono.R");type = "mono_flat"; nm_sel = "sel_flat";nm_model = "flat_Mono"
-# source("./Mono.R");type = "mono_house"; nm_sel = "sel_house";nm_model = "house_Mono"
-# source("./MonoBivar.R");type = "mono_bivar"; nm_sel = "sel_both";nm_model = "MonoBivar"
-
-```
 
 LMOK fonctions
 
@@ -77,17 +53,6 @@ source(file = "./prepareDb.R")
 load(file = "../Data/CCR_69.Rdata")
 dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
 folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
-```
-
-#Definition du modèle
-
-
-```{r}
-coords = read.csv("meshCoords.ascii")
-pts = db.create(x1=coords[,2],x2=coords[,3])
-mesh = meshing(pts,triswitch="nqQ")
-plot(mesh,lwd=0.1)
-plot(poly,add=T)
 ```
 
 
@@ -132,19 +97,17 @@ Le nombre de *folds* est fixé à $K$.
 
 ```{r LMOK_kfold, echo=FALSE, eval=FALSE}
 # Creation of the folds for the cross-validation
-dat = prepareDb(dat, 
+datXval = prepareDb(dat, 
                 nm_fac = nm_fac,
                 nm_var = nm_var, 
                 nm_sel = nm_sel,
                 nm_type = nm_type,
                 type = type,
                 sigma = resModel$sigma)
-datXval <- db.add(dat, folds)
-datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
-datXval <- db.locate(datXval, names = nm_var, loctype = "z", flag.locnew = TRUE)
+datXval <- db.add(datXval, folds,loctype = "code")
 
 # calcul de la validation par K-fold
-datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = FALSE, radix = "kfold", mesh = mesh)
+datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = TRUE, radix = "kfold", mesh = mesh)
 
 # calcul de la validation par K-fold
 tab <- SPDE_LMOK_kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
@@ -183,9 +146,7 @@ dat = prepareDb(dat,
                 nm_type = nm_type,
                 type = type,
                 sigma = resModel$sigma)
-datXval <- db.add(dat, folds)
-datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
-datXval <- db.locate(datXval, names = nm_var, loctype = "z", flag.locnew = TRUE)
+datXval <- db.add(dat, folds,loctype="code")
 
 # definition de la fonction d'estimation à évaluer
 fn_estim <- function(dbin, dbout, radix = "kfold_SPDE_LMOK"){
@@ -203,7 +164,6 @@ datXval <- kfold_compute(datXval, fn_estim = fn_estim, radix = "kfold",
 # de validation croisée en fonction de la valeur du code)
 
 # par "folds" 
-datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
 tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 

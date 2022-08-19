@@ -1,0 +1,163 @@
+---
+  title: "Workflow LMOK"
+  author: "X. Freulon, N. Desassis, H. Wackernagel"
+  date: "12 août 2022"
+  output:
+    pdf_document: default
+    html_document: default
+---
+
+# Initialisation
+
+R et RGeostats
+
+```{r R_init, echo=TRUE, eval=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RGeostats)
+library(Matrix)
+rm(list=ls())
+constant.define("asp",1)
+
+```
+
+
+```{r}
+set.seed(seed=125875)
+n.fold = 10 # Number of folds for the cross-validation
+nm_var = "S_cap"
+nm_fac = "NB_cap"
+nm_type = "C1NATURE"
+type = "flat"
+nm_sel = "sel_flat"
+N=50
+```
+
+```{r}
+source("prepareDb.R")
+source("functions_Xval.R")
+```
+
+```{r}
+load(file = "../Data/CCR_69.Rdata")
+folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
+```
+
+```{r}
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+datXval <- db.add(datXval, folds,locnames = "code")
+```
+
+```{r}
+fn_estim = function(dbin,dbout,radix = "kfold_LM")
+{
+  Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
+  X = as.data.frame(db.extract(dbin,db.getname(dbin,"f",NA),flag.compress = T))
+  reslm = lm(Y~0+.,data=X)
+  for(i in 1:ncol(X))
+  {
+    nm_estim <- paste(radix, paste0("Z",i), "estim", sep = ".")
+    dbout = db.replace(dbout, name = nm_estim, tab = rep(reslm$coefficients[i],dbout$nactive),flag.sel = T)
+  }
+  
+  return(dbout)
+}
+
+fn_estim = function(dbin,dbout,radix = "kfold_LM_admin")
+{
+  Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
+  X = as.data.frame(db.extract(dbin,db.getname(dbin,"f",NA),flag.compress = T))
+  cityTrain = db.extract(dbin,"COM_INSEE",flag.compress = T)
+  cityTest = db.extract(dbout,"COM_INSEE",flag.compress = T)
+  reslmGlobal = lm(Y~0+.,data=X)
+  res = matrix(NA,nrow=dbout$nactive,ncol=ncol(X))
+  for(i in 1:ncol(X))
+  {
+    res[,i] = reslmGlobal$coefficients[i]
+  }
+  for(i in unique(cityTrain))
+  {
+    ind = cityTrain==i
+    if(sum(ind)>N)
+    {
+      x = as.data.frame(X[ind,])
+      y = Y[ind]
+      reslm = lm(y~0+.,data=x)
+      indTest = cityTest == i
+      for(j in 1:ncol(x))
+      {
+        res[indTest,j] = reslm$coefficients[j]
+      }
+    }
+  }
+  
+  for(i in 1:ncol(X))
+  {
+    nm_estim <- paste(radix, paste0("Z",i), "estim", sep = ".")
+    dbout = db.replace(dbout, name = nm_estim, tab = res[,i],flag.sel = T)
+  }
+  
+  return(dbout)
+}
+```
+
+```{r}
+datXval=kfold_compute(datXval, fn_estim = fn_estim, radix = "kfold", 
+                         verbose = FALSE)
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+
+datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+```
+
+```{r}
+computeLogLike = function(dbin)
+{
+  Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
+  X = as.data.frame(db.extract(dbin,db.getname(dbin,"f",NA),flag.compress = T))
+  reslm = lm(Y~0+.,data=X)
+  res = resid(reslm)
+  vres = mean(res^2) - mean(res)^2
+  return(length(res) * log(vres) + sum(res^2)/vres)
+}
+
+computeLogLike = function(dbin)
+{
+  Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
+  X = as.data.frame(db.extract(dbin,db.getname(dbin,"f",NA),flag.compress = T))
+  
+  
+  city = db.extract(dbin,"COM_INSEE",flag.compress = T)
+  reslmGlobal = lm(Y~0+.,data=X)
+  resGlobal = resid(reslmGlobal)
+  vresGlobal = mean(resGlobal^2) - mean(resGlobal)^2
+  l = 0
+  for(i in unique(city))
+  {
+    ind = city==i
+    x = as.data.frame(X[ind,])
+    y = Y[ind]
+    if(sum(ind)>N)
+    {
+      reslm = lm(y~0+.,data=x)
+      res = resid(reslm)
+      vres = mean(res^2) - mean(res)^2
+      l = l + length(res) * log(vres) + sum(res^2)/vres
+    }    else
+    {
+      l = l + length(y) * log(vresGlobal) + sum(resGlobal[ind]^2)/vresGlobal
+    }
+  }
+    return(l)
+}
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"flat")
+
+l1 = computeLogLike(datXval)
+
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"house")
+
+l2 = computeLogLike(datXval)
+
+(-l1-l2)/2
+```
