@@ -11,7 +11,7 @@
 #'  Example of a function to use SPDE_LMOK_krigsim : model_TBD, mesh_TBD
 #'  
 # fn_estim_SPDE_LMOK <- function(dbin, dbout, radix = "estim_SPDE_LMOK"){
-#   SPDE_LMOK_krigsim(dbin, dbout, 
+#   SPDE_LMOK_krigsim(dbout = dbout, dbin = dbin, 
 #                     model = model_TBD, 
 #                     mesh = mesh_TBD,
 #                     nsim = 0, radix = radix)
@@ -145,8 +145,20 @@ kfold_results <- function(dbin, name_real, name_esti,
 #'  
 #'  Required in dbin, locators defined "z", "f1", "code" (f0 is the constant 1.0)
 #'  Optional in dbin, a selection defined (locator "sel")
+#'  
 
 SPDE_LMOK_kfold_compute <- function(dbin, model,  mesh = NA, 
+                                      radix = "SPDE_LMOK.kfold", verbose = TRUE){
+  fn_estim <- function(dbin, dbout, radix = "kfold_SPDE_LMOK"){
+    SPDE_LMOK_krigsim(dbout = dbout, dbin = dbin,
+                      model = model,
+                      mesh  = mesh,
+                      nsim  = 0, radix = radix, verbose = verbose)
+  }
+  kfold_compute(dbin, fn_estim = fn_estim, radix = "kfold",  verbose = verbose)
+}
+  
+SPDE_LMOK_kfold_compute_old <- function(dbin, model,  mesh = NA, 
                                     radix = "SPDE_LMOK.kfold", verbose = TRUE){
   idx_in_z <- db.getcols(dbin, loctype = "z")
   idx_in_f <- db.getcols(dbin, loctype = "f")
