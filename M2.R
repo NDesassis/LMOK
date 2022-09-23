@@ -1,11 +1,23 @@
+if(type == "flat")
+  param_ini <- list(nodes   = nodes, margin  = margin,
+                    type = "IntFac", 
+                    nu = nu,
+                    sigma_0 = 18.878809,
+                    sigma_1 = 5.477902,
+                    tau     = -1.519629,
+                    sigma   = 11.587706,
+                    range   = 302.334218
+  )
+
+if(type =="house")
 param_ini <- list(nodes   = nodes, margin  = margin,
                   type = "IntFac", 
                   nu = nu,
-                  sigma_0 = 10,
-                  sigma_1 = 10,
+                  sigma_0 = 58.61,
+                  sigma_1 = 119.83,
+                  tau     = 0.2,
                   sigma   = 10,
-                  tau     = 0.7,
-                  range   = 10000
+                  range   = 639805.5
 )
 
 #' ------------------------------------------------------------
@@ -29,7 +41,7 @@ modelMulti<- function(x, verbose = TRUE){
 
 x_ini= c(param_ini$sigma_0, param_ini$sigma_1, atanh(param_ini$tau), param_ini$range, param_ini$sigma)
 
-cont = list(fnscale = 1,parscale = c(1,1,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=200,REPORT=1)
+cont = list(fnscale = 1,parscale = c(1,1,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=300,REPORT=1)
 
 
-namesParam = c("sigma_1", "sigma_2", "tau", "range", "sigma")
+namesParam = c("sigma_0", "sigma_1", "tau", "range", "sigma")

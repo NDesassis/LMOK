@@ -1,10 +1,20 @@
-param_ini <- list(nodes   = nodes, margin  = margin,
-                  type = "MonoF", 
-                  nu = nu,
-                  sigma_1 = 10,
-                  sigma   = 10,
-                  range_1 = 10000
-)
+if(type == "mono_flat")
+  param_ini <- list(nodes   = nodes, margin  = margin,
+                    type = "MonoF", 
+                    nu = nu,
+                    sigma_1 = 9.711891,
+                    range_1 = 176.222471,
+                    sigma   = 12.485693
+  )
+
+if(type == "mono_house")
+  param_ini <- list(nodes   = nodes, margin  = margin,
+                    type = "MonoH", 
+                    nu = nu,
+                    sigma_1 = 9.711891,
+                    range_1 = 20000,
+                    sigma   = 30
+  )
 
 #' ------------------------------------------------------------
 #'  Auxiliary function: 1 factor in mono-variable
@@ -14,7 +24,7 @@ param_ini <- list(nodes   = nodes, margin  = margin,
 #' ------------------------------------------------------------
 modelMulti<- function(x, verbose = TRUE){
   nu = param$nu
-  model <- model.create(8, range = abs(x[2]), sill = x[1], param = param$nu)
+  model <- model.create(8, range = abs(x[2]), sill = abs(x[1]), param = param$nu)
   if (verbose){
     print(model)
     print(paste0("sigma = ", x[3]))
@@ -24,7 +34,8 @@ modelMulti<- function(x, verbose = TRUE){
 
 x_ini= c(param_ini$sigma_1, param_ini$range_1, param_ini$sigma)
 
-cont = list(fnscale = 1,parscale = c(1,100000,1), ndeps=rep(1,3)*1e-4,trace = 1, maxit=10,REPORT=1)
+cont = list(fnscale = 1,parscale = c(1,100000,1), ndeps=rep(1,3)*1e-4,trace = 1, maxit=200,REPORT=1)
+
 
 
 namesParam = c("sigma_1", "range_1", "sigma")

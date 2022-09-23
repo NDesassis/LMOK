@@ -1,12 +1,27 @@
-param_ini <- list(nodes   = nodes, margin  = margin,
-                  type = "IndFac", 
-                  nu = nu,
-                  sigma_0 = 10,
-                  sigma_1 = 10,
-                  sigma   = 10,
-                  range_0 = 10000,
-                  range_1 = 10000
-)
+if(type == "flat")
+  param_ini <- list(nodes   = nodes, margin  = margin,
+                    type = "IndFac", 
+                    nu = nu,
+                    sigma_0 = 6.888328,
+                    range_0 = 184.315752,
+                    sigma_1 = 8.770781,
+                    range_1 = 47581.246797,
+                    sigma   = 12.273570
+                  
+ )
+
+
+if(type == "house")
+  param_ini <- list(nodes   = nodes, margin  = margin,
+                    type = "IndFac", 
+                    nu = nu,
+                    sigma_0 = 10,
+                    range_0 = 10000,
+                    sigma_1 = 10,
+                    range_1 = 10000,
+                    sigma   = 31
+                    
+  )
 
 #' ------------------------------------------------------------
 #'  Auxiliary function: BiInt (independence of the 4 factors)
@@ -31,9 +46,15 @@ modelMulti<- function(x, verbose = TRUE){
 
 x_ini= c(param_ini$sigma_0,param_ini$range_0,param_ini$sigma_1,param_ini$range_1,param_ini$sigma)
 
-cont = list(fnscale = 1,parscale = c(1,100000,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=200,REPORT=1)
+cont = list(fnscale = 1,parscale = c(1,100000,1,100000,1), ndeps=rep(1,5)*1e-4,trace = 1, maxit=300,REPORT=1)
+
+x_ini=c(param_ini$sigma_0,
+        param_ini$range_0,
+        param_ini$sigma_1,
+        param_ini$range_1,
+        param_ini$sigma
+)
 
 
 
-
-namesParam = c("sigma_1", "range_1", "sigma_2", "range_2", "sigma")
+namesParam = c("sigma_0", "range_0", "sigma_1", "range_1", "sigma")
