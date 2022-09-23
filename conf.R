@@ -17,7 +17,7 @@ nm_var = "S_cap"
 nm_fac = "NB_cap"
 nm_type = "C1NATURE"
 
-coords = read.csv("meshCoords.ascii")
+coords = read.csv("../Data/meshCoords.ascii")
 pts = db.create(x1=coords[,2],x2=coords[,3])
 mesh = meshing(pts,triswitch="nqQ")
 #mesh = NA
