@@ -7,11 +7,13 @@ output: html_document
 library(RGeostats)
 rm(list=ls())
 set.seed(121122)
+nm_input_RData <- "../Data/CCR_69.Rdata"
+nm_output_mesh <- "../Data/CCR_69_meshCoords.ascii"
 ```
 
 
 ```{r}
-load(file = "../Data/CCR_69.Rdata")
+load(file = nm_input_RData)
 poly = dpts[[1]]$polygon
 grd=db.grid.init(poly,nodes = c(50,50),margin=c(10,10))
 grd = db.locate(grd,"Polygon","z")
@@ -22,7 +24,6 @@ grd = morpho(grd,0.5,1.5,oper = "erode")
 grdCoarse = db.grid.refine(grd,nmult=c(2,2),flag.refine = F,flag.copy = T)
 grdCoarse = db.rename(grdCoarse,grdCoarse$natt,"morpho")
 plot(grdCoarse)
-
 grdCoarse = db.stat.grid(dat,grdCoarse,"x1",fun="num")
 plot(poly,add=T)
 ```
@@ -56,6 +57,6 @@ A=mesh.barycenter(dat,mesh)
 ```
 
 ```{r}
-write.csv(coords,"meshCoords.ascii")
+write.csv(coords, file = nm_output_mesh)
 ```
 
