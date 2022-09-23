@@ -17,6 +17,7 @@ library(RGeostats)
 library(Matrix)
 rm(list=ls())
 constant.define("asp",1)
+
 ```
 
 
@@ -31,6 +32,7 @@ source("conf.R")
 
 
 ```{r Model_init, echo = TRUE, eval = TRUE}
+
 # required in SPDE_LMOK_init_geometry if mesh not provided
 param <- list(margin = margin, nodes = nodes, nu = nu)
 ```
@@ -57,6 +59,8 @@ folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```{r}
 # illustration avec les paramètres de simulation
 modelMulti(x_ini, verbose = TRUE)
+
+
 # Creation of the function computing the log-likelihood
 fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = modelMulti, verbose = TRUE,mesh=mesh)
 # Valeurs à l'initialisation
@@ -67,6 +71,7 @@ Optimisation de la vraisemblance
 
 
 ```{r}
+cont$maxit = 1
 res   <- optim(par = x_ini, fn = fn_MLL, verbose = F, method="Nelder-Mead", control = cont)
 x_est = res$par
 ```
@@ -74,20 +79,24 @@ x_est = res$par
 ```{r LMOK_MLL, eval=TRUE, echo=FALSE}
 #res   <- optim(par = x_est, fn = fn_MLL, verbose=F, method="Nelder-Mead", control = cont)
 #x_est <- res$par
+
+
 tab <- rbind(x_ini, x_est)
 colnames(tab) <- namesParam
 rownames(tab) <- c("Initial", "Final")
 knitr::kable(round(tab,2), caption = "Maximum de vraisemblance")
+
 # creation of the model and measurement error variable
 resModel   <- modelMulti(x_est, verbose = TRUE)
 m_est <- resModel$model
+
 ```
 
 # Validation croisée par K-fold
 
 Le nombre de *folds* est fixé à $K$.
 
-```{r LMOK_kfold, echo=FALSE, eval=FALSE}
+```{r LMOK_kfold, echo=TRUE, eval=TRUE}
 # Creation of the folds for the cross-validation
 datXval = prepareDb(dat, 
                 nm_fac = nm_fac,
@@ -97,10 +106,24 @@ datXval = prepareDb(dat,
                 type = type,
                 sigma = resModel$sigma)
 datXval <- db.add(datXval, folds,loctype = "code")
+
 # calcul de la validation par K-fold
+<<<<<<< HEAD
+flag.new <- FALSE
+if (!flag.new) {
+  # initial version of the kfold function
+  datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, mesh = mesh, 
+                                     radix = "kfold", verbose = TRUE)
+} else {
+  # new version of the kfold function
+  fn_estim <- function(dbin, dbout, radix = "kfold_SPDE_LMOK"){
+    SPDE_LMOK_krigsim(dbout = dbout, dbin = dbin,
+=======
 datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, verbose = TRUE, radix = "kfold", mesh = mesh)
+
 # calcul de la validation par K-fold
 tab <- SPDE_LMOK_kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+
 # if the Xval is computed on house and flat (model M3)
 if(length(db.getcols(datXval, "f")) > 2){
   for (i in 1:2){
@@ -111,9 +134,12 @@ if(length(db.getcols(datXval, "f")) > 2){
                  )
   }
 }
+
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+
 # Map of the absolute value of the validation residual
 datXval <- db.add(datXval, AResidual = abs(datXval[,nm_var] - datXval[,"kfold.S.estim"]))
+
 # The map is computed on a regular grid 1x1 km^2
 dat.grd <- db.grid.init(datXval, dcell = rep(1000, 2))
 dat.grd <- db.stat.grid(datXval, dat.grd, fun = "mini")
@@ -133,27 +159,39 @@ dat = prepareDb(dat,
                 type = type,
                 sigma = resModel$sigma)
 datXval <- db.add(dat, folds,loctype="code")
+
 # definition de la fonction d'estimation à évaluer
 fn_estim <- function(dbin, dbout, radix = "kfold_SPDE_LMOK"){
   SPDE_LMOK_krigsim(dbin, dbout,
+>>>>>>> 2b61fa284483322a74ae5d33f531f0b9f693bb1e
                     model = m_est,
                     mesh  = mesh,
-                    nsim  = 0, radix = radix, verbose = FALSE)
+                    nsim  = 0, radix = radix, verbose = TRUE)
+    }
+  datXval <- kfold_compute(datXval, fn_estim = fn_estim, 
+                         radix = "kfold",  verbose = TRUE)
 }
-# calcul de la validation par K-fold
-datXval <- kfold_compute(datXval, fn_estim = fn_estim, radix = "kfold", 
-                         verbose = FALSE)
+
 # calcul de la validation par K-fold (on peut calculer les statistiques de l'erreur
 # de validation croisée en fonction de la valeur du code)
+
 # par "folds" 
+<<<<<<< HEAD
+datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
+tab     <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+=======
 tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+>>>>>>> 2b61fa284483322a74ae5d33f531f0b9f693bb1e
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+
 # par nature (nm_type)
 datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
 tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+
 # Map of the absolute value of the validation residual
 datXval <- db.add(datXval, AResidual = abs(datXval[,nm_var] - datXval[,"kfold.S.estim"]))
+
 # The map is computed on a regular grid 1x1 km^2
 dat.grd <- db.grid.init(datXval, dcell = rep(1000, 2))
 dat.grd <- db.stat.grid(datXval, dat.grd, fun = "mini")
