@@ -96,7 +96,6 @@ Le nombre de *folds* est fixé à $K$.
 Le *flag.new* est utilisé pour tester la nouvelle et ancienne implémentation.
 
 ```{r LMOK_kfold, echo=TRUE, eval=TRUE}
-flag.new <- TRUE
 # Creation of the folds for the cross-validation
 datXval = prepareDb(dat, 
                 nm_fac = nm_fac,
@@ -108,13 +107,6 @@ datXval = prepareDb(dat,
 datXval <- db.add(datXval, folds,loctype = "code")
 
 # calcul de la validation par K-fold
-flag.new <- FALSE
-if (!flag.new) {
-  # initial version of the kfold function
-  datXval <- SPDE_LMOK_kfold_compute(datXval, model = m_est, mesh = mesh, 
-               radix = "kfold", verbose = TRUE)
-} else {
-  # new version of the kfold function
   fn_estim <- function(dbin, dbout, radix = "kfold_SPDE_LMOK"){
     SPDE_LMOK_krigsim(dbout = dbout, dbin = dbin, 
                     model = m_est,
@@ -123,14 +115,13 @@ if (!flag.new) {
     }
   datXval <- kfold_compute(datXval, fn_estim = fn_estim, 
                radix = "kfold", verbose = TRUE)
-}
-
-# par "folds" 
+  
+# analyse des résultats par "folds" 
 datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
 tab     <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
-# par nature (nm_type)
+# analyse des résultats par nature (nm_type)
 datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
 tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))

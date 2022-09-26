@@ -1,203 +1,46 @@
-# --------------------------------------------------------------------
-# Kriging functions
-# --------------------------------------------------------------------
-# New version of the functions (combining the two mono-variate model)
+# functions to implement LMOK with the SPDE approach
 
-# 
-# param: a list of parameters used for the kriging of the drift parameters
-
-#  nu:  is the regularity coefficient of the matern covariance function
-#  sigma: is the nugget effect of the modeling error
-
-#  type  \in {"IndFact", "IntFact"} defines the type of model
-#    "IndFact" the two FA are independent and defined by their respective sill and range
-#    In this case, the following parameters should be defined
-#     range_1: range of the Matern covariance function of the first (constant) parameter
-#     sigma_1: standard deviation of the first parameter
-#     range_2: range of the Matern covariance function of the second parameter
-#     sigma_2: standard deviation of the second parameter
-
-#    "IntFact" The two FA are in intrinsic correlation defined by their respective sill, 
-#     the coefficient of correlation, and the range of the common spatial structure
-#    In this case, the following parameters should be defined
-#     range:   range of the common Matern covariance function
-#     sigma_1: standard deviation of the first parameter
-#     range_2: range of the Matern covariance function of the second parameter
-#     tau    : coefficient of corstandard deviation of the second parameter
-
-# If the mesh is not provided, the mesh is computed using the bounding box of the
-# input data set and the following parameters
-
-#  border: proportion of the range to extend the bounding box (if mesh not provided)
-#  nodes:  number of vertices along the main direction (if mesh not provide)
-
-
-# Performing the kriging or the conditional simulation according to the value of nsim.
-# If nsim == 0, only the kriging is computed and stored
-# If nsim >  0, only the simulations are performed and according to the value of the flag.ce 
-# the simulations are stored or the conditinal expectation (mean and std) are computed and stored.
-
-#' ----------------------------------------
-#' Function to compute LMOK using SPDE
-#' ----------------------------------------
-#' Multi-facteur
-#'  function to initialize
-
-SPDE_LMOK_init_geometry <- function(dbin, mesh = NA, verbose = TRUE){
-  
-  idx_in_z <- db.getcols(dbin, "z")
-  idx_in_f <- db.getcols(dbin, "f")
-  stopifnot((idx_in_z > 0))
-
-  # Geometry (if the mesh is not available, it is computed from the limits of dbin)
-  if (is.na(mesh)){
-    bb    <- dbin$limits
-    bb    <-  bb + outer(c(-1,1), (bb[2,] - bb[1,])* param$margin, "*") 
-    dx    <- (bb[2,] - bb[1,]) / (param$nodes - 1)
-    mesh  <- meshing(extendmin = bb[1,], extendmax = bb[2,], cellsize = dx)
-  }
-  n.mesh <- mesh$npoints
-  
-  # Input data (active selection & factors & observation)
-  X  <- as.matrix(db.extract(dbin, names = idx_in_f, flag.compress = TRUE))
-  Y  <- db.extract(dbin, names = idx_in_z, flag.compress = TRUE)
-
-  # Computing the projection matrix for the data
-  AprojMean  <- mesh.barycenter(dbin, mesh)
-  for (i in 1:length(idx_in_f)){
-    if(i == 1) {
-      Aproj <- Diagonal(x=X[,i])%*%AprojMean
-    } else {
-      Aproj <- cbind(Aproj, Diagonal(x=X[,i])%*%AprojMean)
-    }
-  }
-  if(verbose){ 
-    print(paste0("SPDE_LMOK::geometry: Input data"))
-    print(paste0(" - number of data:    ", dbin$nactive, "/", dbin$nech))
-    print(paste0(" - size of the mesh : ", n.mesh))
-    print(paste0(" - number of factors: ", length(idx_in_f)))
-    print(paste0(" - return values    : "))
-    print(paste0(" - dim(X)    : ", dim(X)))
-    print(paste0(" - dim(Y)    : ", length(Y)))
-    print(paste0(" - dim(Aproj): ", dim(Aproj)))
-  }
-  
-
-  return(list(
-    X     = X,
-    Y     = Y,
-    mesh  = mesh,
-    Aproj = Aproj
-  ))
-}
-
-SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = FALSE){
-  
-  n.var  <- model$nvar
-  n.cova <- model$ncova
-  stopifnot(n.var == ncol(geo$X))  
-
-  if(length(sigma) == 1) {sigma <- rep(sigma, length(geo$Y))}
-  if(verbose){
-    print(paste0("SPDE_LMOK_init_model: length(sigma) =", length(sigma)))
-  }
-  stopifnot(length(sigma) == length(geo$Y))
-  
-  # defining the link between the structures and the factors
-  nnF <- rep(0, n.var)
-  idF <- rep(0, n.var)
-  for (i in 1:n.cova){
-    idx <- (1:n.var)[diag(model.reduce(model, structs = i)$silltot) > 0]
-    nnF[idx] <- nnF[idx] + 1
-    idF[idx] <- i
-  }
-  stopifnot(nnF == 1)
-  
-  if(verbose){ 
-    print(paste0("SPDE_LMOK::init: Model"))
-    print(paste0(" - structures nbr.  : ", n.cova))    
-  }
-
-  # Computing the precision matrix on the mesh
-  expand.idx <- function(idx){
-    I = as.numeric(outer(X=idx, Y=idx, FUN = function(i,j){i}))
-    J = as.numeric(outer(X=idx, Y=idx, FUN = function(i,j){j}))
-    list(I = I, J = J)
-  }
-  
-  # Loop over the structures of the model
-  D    <- Diagonal(x= 1/sigma^2)
-  prec <- t(geo$Aproj)%*%D%*%geo$Aproj
-  items<- list()
-  for (i in 1:n.cova){
-    ci  <- model@basics[[i]]
-    # Matrix Mi
-    cMi  <- ci@sill
-    idx  <- which(diag(cMi) > 0)
-    qMi  <- solve(cMi[idx, idx])
-    i.Mi <- expand.idx(idx)  
-    x.Mi <- as.numeric(qMi)
-    Mi   <- sparseMatrix(i = i.Mi$I, j = i.Mi$J, x = x.Mi, dims = c(n.var, n.var))    
-    # Matrix Qi
-    mi  <- model.create(
-      vartype = ci@vartype, 
-      range   = ci@range,
-      param   = ci@param
-    )
-    Qi   <- spde.matrices(model=mi,flag.Q = TRUE, mesh=geo$mesh)$Q
-    
-    # updating precision matrix
-    prec <- prec + kronecker(Mi, Qi)
-    
-    if(verbose) {
-      print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"))
-      print(paste0("SPDE_LMOK: structure #", i))
-      print(Mi)
-      print(mi)
-      print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"))
-    }
-    items[[1+length(items)]] <- list(M = qMi, Q = Qi)
-  }
-  if(verbose){
-    print(model)
-  }
-  cholPrec =  Cholesky(prec, LDL=FALSE)
-  return(list(
-    items    = items,
-    D        = D,
-    cholPrec = cholPrec
-  ))
-}
-  
-SPDE_LMOK_init_spde <- function(geo, mod, verbose = TRUE){
-  computeInvSigma <- function(X, A, cholPrec, D){
-    D %*% (X - A %*% (solve(cholPrec, t(A) %*% D %*% X)))
-  }
-  # computing the estimate on the mesh
-  invSigmaX <- computeInvSigma(geo$X, geo$Aproj, mod$cholPrec, mod$D)
-  coeff     <- solve(t(geo$X)%*%invSigmaX, t(invSigmaX))%*%geo$Y
-  Sc        <- geo$Y - geo$X %*% coeff
-  Z         <- solve(mod$cholPrec, t(geo$Aproj)%*%mod$D%*%Sc)
-  invSigmaSc<- computeInvSigma(Sc, geo$Aproj, mod$cholPrec, mod$D)
-  if (verbose) {
-    for (i in seq_along(coeff)){
-      print(paste0("SPDE_LMOK: coeff[",i,"] = ", coeff[i]))
-    }
-    print(paste0("SPDE_LMOK: length(Z)       = ", length(Z)))
-    print(paste0("SPDE_LMOK: length(Sc)      = ", length(Sc)))
-    print(paste0("SPDE_LMOK: dim(invSigmaX)  = ", dim(invSigmaX)))
-    print(paste0("SPDE_LMOK: dim(invSigmaSc) = ", dim(invSigmaSc)))
-  }
-  return(list(
-    invSigmaX  = invSigmaX,
-    invSigmaSc = invSigmaSc,
-    Sc         = Sc,
-    Z          = Z,
-    coeff      = coeff
-  ))
-}
-
-
+#' compute the estimation/simulation of the locally varying parameters
+#' 
+#' The SPDE approach is used to compute the estimations of the latent fields.
+#' 
+#'@param dbout The db-class structure containing the target file
+#'The estimation is performed only for the selected samples of the target file.
+#'@param dbin The db-class structure containing the data file
+#'#'The following variables should be defined in the data file:
+#' - the observed values (locator "z")
+#' - the factors associated to the latent fields to be estimated (locator "f")
+#' - the standard deviation of the modeling error (locator "v")
+#' The number of latent fields/factors should be equal to the number of variables 
+#' of the model (length(db.getcols(dbin, "f")) == model$nvar).
+#'@param model The model-class defining the covariance model of the latent fields
+#'As the SPDE approach is used, only K-Bessel covariances should be used as basic structures
+#'of the linear model of coregionalization. 
+#'@param mesh The mesh-class containing the meshing of the domain 
+#'If the mesh is not provided (mesh == NA), the mesh is a regular grid computed using 
+#'the bounding box of the input data set and the following parameters
+#'  - param$nodes The number of vertices along the main directions
+#'  - param$margin The inflating coefficients of the bounding box
+#'@param nsim The number of conditional simulations of the latent fields 
+#'(i.e. the spatially varying parameters). 
+#'If nsim == 0, only the kriging value is computed.
+#'@param seed The seed used by the generator of the random numbers.
+#'If seed == NA, the generator is not initialized. 
+#'The random generator should be reset to be able to reproduce simulations. 
+#'@param flag.ce A Boolean value controlling the use of the simulations (nsim > 0).
+#'If flag.ce == TRUE, the mean and the standard deviation of the simulations are computed.
+#'If flag.ce == FALSE, the simulations are stored in output file *dbout*.
+#'@param radix A string used as prefix of the variables created in the output file *dbout*.
+#'@param verbose A Boolean variable to control the printed messages
+#'@return The target Db where the following variables have been added:
+#'If nsim == 0,
+#' - the estimation of the latent fields (if nsim==0)
+#' If nsim > 0 and flag.ce == FALSE,
+#' - the conditional simulations of the latent fields (if nsim>=0 and flag.ce == FALSE)
+#' If nsim > 0 and flag.ce == TRUE,
+#' - the conditional expectation computed as the mean of the simulations
+#' - the conditional standard deviation computed as the standard deviation of simulations
+#' These variables are multiplied for each one of the latent fields (numbered from 1).
 SPDE_LMOK_krigsim <- function(dbout, dbin, model, mesh = NA,
                               nsim = 0, seed = NA, flag.ce = FALSE, 
                               radix = "SPDE_LMOK", verbose = FALSE){
@@ -260,7 +103,22 @@ SPDE_LMOK_krigsim <- function(dbout, dbin, model, mesh = NA,
   dbout 
 }
 
-
+#' function to initialize the log likelihood function
+#' 
+#' It can be used before the optimization of the log likelihood using *optim*.
+#' 
+#'@param dbin The db-class structure containing the data file
+#'@param param2model The input function converting a vector of parameters into a model. 
+#'  The input parameters of this function are (x, verbose)
+#'   - x is a vector of real values, 
+#'   - verbose is a Boolean variable
+#'  the return value list(model, sigma) where
+#'   - model is a model-class defining a covariance function
+#'   - sigma is a vector of positive values giving the standard deviation of the modeling error
+#'@param verbose A Boolean variable to control the printed messages
+#'@return a function computing the log likelihood with
+#'  - the input parameter (vector of real values x, a Boolean variable verbose)
+#'  - the output the log likelihood value for the parameter values x
 SPDE_LMOK_init_MLL <- function(dbin, param2model, mesh = NA, verbose = TRUE){
   
   geo <- SPDE_LMOK_init_geometry(dbin = dbin, mesh = mesh, verbose = verbose)
@@ -300,114 +158,190 @@ SPDE_LMOK_init_MLL <- function(dbin, param2model, mesh = NA, verbose = TRUE){
   return(fn_LL)
 }
 
-#' ---------------------------------------------------------------------
-#' Utility functions to implement LMOK with SPDE approach
-#' ---------------------------------------------------------------------
-
-SPDE_eval_diff <- function(u,v) {
-  tab <- matrix(c(mean(u - v), mean(abs(u-v)), sqrt(mean((u-v)^2))), nrow = 1, ncol = 3)
-  colnames(tab) <- c("mean", "MAE", "RMSE")
-  tab
+#' function to initialize the geometry structure
+#' 
+#' This function is used by the functions 
+#' *SPDE_LMOK_krigsim* and *SPDE_LMOK_init_MLL*
+#' 
+#'@param dbin The db-class structure containing the data file
+#'@param mesh The mesh-class structure containing the meshing of the domain
+#'@param verbose A Boolean variable to control the printed messages
+#'@return The geometry structure containing 
+#'  - the input data *Y*, 
+#'  - the factors *X*, 
+#'  - the mesh *mesh* and 
+#'  - the projection matrix *Aproj*
+SPDE_LMOK_init_geometry <- function(dbin, mesh = NA, verbose = TRUE){
+  
+  idx_in_z <- db.getcols(dbin, "z")
+  idx_in_f <- db.getcols(dbin, "f")
+  stopifnot((idx_in_z > 0))
+  
+  # Geometry (if the mesh is not available, it is computed from the limits of dbin)
+  if (is.na(mesh)){
+    bb    <- dbin$limits
+    bb    <-  bb + outer(c(-1,1), (bb[2,] - bb[1,])* param$margin, "*") 
+    dx    <- (bb[2,] - bb[1,]) / (param$nodes - 1)
+    mesh  <- meshing(extendmin = bb[1,], extendmax = bb[2,], cellsize = dx)
+  }
+  n.mesh <- mesh$npoints
+  
+  # Input data (active selection & factors & observation)
+  X  <- as.matrix(db.extract(dbin, names = idx_in_f, flag.compress = TRUE))
+  Y  <- db.extract(dbin, names = idx_in_z, flag.compress = TRUE)
+  
+  # Computing the projection matrix for the data
+  AprojMean  <- mesh.barycenter(dbin, mesh)
+  for (i in 1:length(idx_in_f)){
+    if(i == 1) {
+      Aproj <- Diagonal(x=X[,i])%*%AprojMean
+    } else {
+      Aproj <- cbind(Aproj, Diagonal(x=X[,i])%*%AprojMean)
+    }
+  }
+  if(verbose){ 
+    print(paste0("SPDE_LMOK::geometry: Input data"))
+    print(paste0(" - number of data:    ", dbin$nactive, "/", dbin$nech))
+    print(paste0(" - size of the mesh : ", n.mesh))
+    print(paste0(" - number of factors: ", length(idx_in_f)))
+    print(paste0(" - return values    : "))
+    print(paste0(" - dim(X)    : ", dim(X)))
+    print(paste0(" - dim(Y)    : ", length(Y)))
+    print(paste0(" - dim(Aproj): ", dim(Aproj)))
+  }
+  
+  
+  return(list(
+    X     = X,
+    Y     = Y,
+    mesh  = mesh,
+    Aproj = Aproj
+  ))
 }
 
-#' Definition of the parameters of the LMOK
-SPDE_param2value <- function(param, nu = 1, margin = 0.2, nodes = c(100, 100), type = "IntFac"){
-  ll <- NULL
-  if(type == "IntFac"){
-    ll <- list(
-      nodes   = nodes,
-      margin  = margin,
-      nu      = nu,
-      type    = type,
-      range   = param[5],
-      sigma_1 = abs(param[1]),
-      sigma_2 = abs(sqrt(param[2]^2 + param[3]^2)),
-      tau     = param[2] / sqrt(param[2]^2 + param[3]^2),
-      sigma   = abs(param[4])
-    )
+#' function to initialize the model structure
+#' 
+#' This function is used by the functions 
+#' *SPDE_LMOK_krigsim* and *SPDE_LMOK_init_MLL*
+#' 
+#'@param model The model-class structure containing the covariance model
+#'@param sigma The vector of standard deviation of the modeling error
+#'@param geo The geometry structure generated by the function *SPDE_LMOK_init_geometry*
+#'@param verbose A Boolean variable to control the printed messages
+#'@return The list of items used for the computation of the MLL, kriging and simulation
+SPDE_LMOK_init_model <- function(model, sigma, geo, verbose = FALSE){
+  
+  n.var  <- model$nvar
+  n.cova <- model$ncova
+  stopifnot(n.var == ncol(geo$X))  
+  
+  if(length(sigma) == 1) {sigma <- rep(sigma, length(geo$Y))}
+  if(verbose){
+    print(paste0("SPDE_LMOK_init_model: length(sigma) =", length(sigma)))
   }
-  if(type == "IndFac"){
-    ll <- list(
-      nodes   = nodes,
-      margin  = margin,
-      nu      = nu,
-      type    = type,
-      sigma_1 = abs(param[1]),
-      sigma_2 = abs(param[2]),
-      sigma   = abs(param[3]),
-      range_1 = param[4],
-      range_2 = param[5]
-    )
+  stopifnot(length(sigma) == length(geo$Y))
+  
+  # defining the link between the structures and the factors
+  nnF <- rep(0, n.var)
+  idF <- rep(0, n.var)
+  for (i in 1:n.cova){
+    idx <- (1:n.var)[diag(model.reduce(model, structs = i)$silltot) > 0]
+    nnF[idx] <- nnF[idx] + 1
+    idF[idx] <- i
   }
-  ll
+  stopifnot(nnF == 1)
+  
+  if(verbose){ 
+    print(paste0("SPDE_LMOK::init: Model"))
+    print(paste0(" - structures nbr.  : ", n.cova))    
+  }
+  
+  # Computing the precision matrix on the mesh
+  expand.idx <- function(idx){
+    I = as.numeric(outer(X=idx, Y=idx, FUN = function(i,j){i}))
+    J = as.numeric(outer(X=idx, Y=idx, FUN = function(i,j){j}))
+    list(I = I, J = J)
+  }
+  
+  # Loop over the structures of the model
+  D    <- Diagonal(x= 1/sigma^2)
+  prec <- t(geo$Aproj)%*%D%*%geo$Aproj
+  items<- list()
+  for (i in 1:n.cova){
+    ci  <- model@basics[[i]]
+    # Matrix Mi
+    cMi  <- ci@sill
+    idx  <- which(diag(cMi) > 0)
+    qMi  <- solve(cMi[idx, idx])
+    i.Mi <- expand.idx(idx)  
+    x.Mi <- as.numeric(qMi)
+    Mi   <- sparseMatrix(i = i.Mi$I, j = i.Mi$J, x = x.Mi, dims = c(n.var, n.var))    
+    # Matrix Qi
+    mi  <- model.create(
+      vartype = ci@vartype, 
+      range   = ci@range,
+      param   = ci@param
+    )
+    Qi   <- spde.matrices(model=mi,flag.Q = TRUE, mesh=geo$mesh)$Q
+    
+    # updating precision matrix
+    prec <- prec + kronecker(Mi, Qi)
+    
+    if(verbose) {
+      print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"))
+      print(paste0("SPDE_LMOK: structure #", i))
+      print(Mi)
+      print(mi)
+      print(paste0(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"))
+    }
+    items[[1+length(items)]] <- list(M = qMi, Q = Qi)
+  }
+  if(verbose){
+    print(model)
+  }
+  cholPrec =  Cholesky(prec, LDL=FALSE)
+  return(list(
+    items    = items,
+    D        = D,
+    cholPrec = cholPrec
+  ))
 }
 
-SPDE_value2param <- function(value){
-  par <- NULL
-  if(value$type == "IntFac"){
-    par <- c(
-      value$sigma_1, 
-      value$tau * value$sigma_2, 
-      value$sigma_2 * sqrt(1-value$tau^2), 
-      value$sigma, 
-      value$range
-    )
+#' function to initialize the SPDE structure
+#' 
+#' This function is used by the functions 
+#' *SPDE_LMOK_krigsim* and *SPDE_LMOK_init_MLL*
+#' 
+#'@param geo The geometry structure generated by the function *SPDE_LMOK_init_geometry*
+#'@param mod The model geometry generated by the function *SPDE_LMOK_init_model*
+#'@param verbose A Boolean variable to control the printed messages
+#'@return The list of items used for the computation of the MLL, kriging and simulation
+SPDE_LMOK_init_spde <- function(geo, mod, verbose = TRUE){
+  computeInvSigma <- function(X, A, cholPrec, D){
+    D %*% (X - A %*% (solve(cholPrec, t(A) %*% D %*% X)))
   }
-  if(value$type == "IndFac"){
-    par <- c(
-      value$sigma_1, 
-      value$sigma_2, 
-      value$sigma, 
-      value$range_1,
-      value$range_2
-    )
+  # computing the estimate on the mesh
+  invSigmaX <- computeInvSigma(geo$X, geo$Aproj, mod$cholPrec, mod$D)
+  coeff     <- solve(t(geo$X)%*%invSigmaX, t(invSigmaX))%*%geo$Y
+  Sc        <- geo$Y - geo$X %*% coeff
+  Z         <- solve(mod$cholPrec, t(geo$Aproj)%*%mod$D%*%Sc)
+  invSigmaSc<- computeInvSigma(Sc, geo$Aproj, mod$cholPrec, mod$D)
+  if (verbose) {
+    for (i in seq_along(coeff)){
+      print(paste0("SPDE_LMOK: coeff[",i,"] = ", coeff[i]))
+    }
+    print(paste0("SPDE_LMOK: length(Z)       = ", length(Z)))
+    print(paste0("SPDE_LMOK: length(Sc)      = ", length(Sc)))
+    print(paste0("SPDE_LMOK: dim(invSigmaX)  = ", dim(invSigmaX)))
+    print(paste0("SPDE_LMOK: dim(invSigmaSc) = ", dim(invSigmaSc)))
   }
-  par  
+  return(list(
+    invSigmaX  = invSigmaX,
+    invSigmaSc = invSigmaSc,
+    Sc         = Sc,
+    Z          = Z,
+    coeff      = coeff
+  ))
 }
 
-# Create a RGeostats model from a parameters structure
-SPDE_param2model <- function(param){
-  m <- NULL
-  if(param$type == "IndFac"){
-    m <- model.create(vartype = 8, 
-                      param = param$nu, 
-                      range = param$range_1,
-                      sill  = matrix(c(param$sigma_1^2, rep(0,3)),2,2)
-    )
-    m <- model.create(vartype = 8, 
-                      param = param$nu, 
-                      range = param$range_2,
-                      sill = matrix(c(rep(0,3),param$sigma_2^2),2,2),
-                      model = m
-    )
-  } else if(param$type == "IntFac") {
-    covM <- matrix(c(param$sigma_1^2,
-                     rep(param$sigma_1*param$sigma_2*param$tau,2),
-                     param$sigma_2^2), 2, 2)
-    m <- model.create(vartype = 8, 
-                      param = param$nu, 
-                      range = param$range,
-                      sill  = covM
-    )
-  } else if(param$type == "bivar") {
-    m <- NULL
-    covM <- matrix(0, 4, 4)
-    covM[1:2, 1:2] <- matrix(
-      c(param$coef_1[1]^2, rep(prod(param$coef_1),2), param$coef_1[2]^2),
-      2, 2)
-    m <- model.create(vartype = 8,
-                      param = param$nu,
-                      range = param$range[1],
-                      sill  = covM)
-    covM <- matrix(0, 4, 4)
-    covM[3:4, 3:4] <- matrix(
-      c(param$coef_2[1]^2, rep(prod(param$coef_2),2), param$coef_2[2]^2),
-      2, 2)
-    m <- model.create(vartype = 8,
-                      param = param$nu,
-                      range = param$range[2],
-                      sill  = covM, 
-                      model = m)
-  }
-  m
-}
+

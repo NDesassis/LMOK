@@ -1,7 +1,3 @@
-
-
-
-
 # Paramètres du modèle
 
 nu      <- 1        # Coefficient de la covariance de Matern

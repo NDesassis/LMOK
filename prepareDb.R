@@ -1,3 +1,20 @@
+#' setting the input data file for the estimation using a linear model with locally varying parameters
+#' 
+#'@param dat The db-class structure containing the data file
+#'@param nm_fac A string containing the name of the factors
+#'@param nm_var A string containing the name of the variable to be estimated
+#'@param nm_sel A string containing the name of the factors
+#'@param nm_type A string containing the name of variable defining the type of sample
+#'@param type A string defining the estimation problem. Possible values are:
+#' - "house": factors for the surface of houses are 1 and nm_fac
+#' - "flat" : factors for the surface of flats are 1 and nm_fac
+#' - "both" : factors for the surface of houses and flats, are 1_H, 1_F, 1_H x nm_fac, 1_F x nm_fac
+#' - mono_house: factor for the surface of houses is nm_fac
+#' - mono_flat:  factor for the surface of flats is nm_fac
+#' - mono_bivar: factor for the surface of houses and flats, 1_H x nm_fac, 1_F x nm_fac
+#'@param sigma A numerical vectors with the standard deviation of the modeling error.
+#'A single value if the mono-variate cases and two values in the bi-variate cases.
+#'@return The input db where the role of each required variable has been setup.
 prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,sigma=1)
 {
   # re-initialisation de la base de données
