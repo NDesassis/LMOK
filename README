@@ -1,0 +1,43 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Title  : Etude CCR - Estimation de la surface par modèle linéaire
+%Date   : 2022-09-28
+%Auteurs: Nicolas Desassis, Xavier Freulon, Hans Wackernagel
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Fichier Scripts Rmd
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+00_import_data.Rmd
+01_EDA.Rmd
+02_compute_meshing.Rmd
+03_workflow_LMOK.Rmd
+04_workflow_LM.Rmd
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Fichier de fonctions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+functions_draw_data.R
+functions_kriging.R
+functions_spde.R
+functions_Xval.R
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Fichier de paramètres et de configuration
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+conf.R
+param_M1.R
+param_M2.R
+param_M3.R
+param_Mono.R
+param_MonoBivar.R
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Description de l'aborescences - Structure des fichiers
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../LMOK - répertoire des scripts et fichier de configuration (sous git)
+../Data - répertoire des données CCR et INSEE (uniquement en local ou sur le cloud des mines)
+Pour l'étude sur le département du Rhône, on a
+	data69.csv fichier initial CCR
+	departement-69 répertoire contenant les informations INSEE (limites,...)
+
+Les fichiers créés/lus par les scripts sont stockés dans le répertoire ../Data
+- CCR_data_Rhone.Rdata (créé par 00_import_data.Rmd avec data69.csv et departement-69)
+- CCR_Rhone.Rdata (créé par 01_EDA.Rmd avec CCR_data_Rhone.Rdata)
+- CCR_Rhone_meshCoords.asccii (créé par 02_compute_meshing.Rmd)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+

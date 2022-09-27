@@ -1,5 +1,5 @@
 ---
-  title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - MONO-FACTEUR - Département du Rhône"
+  title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - EDA"
   author: "X. Freulon, N. Desassis, H. Wackernagel"
   date: "31 juillet 2022"
   output:
@@ -30,55 +30,17 @@ nm_sel_train <- paste0(nm_sel, "_train")
 nm_sel_test  <- paste0(nm_sel, "_test")
 ```
 
-Initialisation de fonctions utiles pour le krigeage
+Initialisation des fonctions
 
 ```{r kriging_LM_fun, eval=TRUE}
 source(file = "./functions_draw_data.R")
 ```
 
-
-
 ## Données RGeostats
 
 ```{r data_loading, echo=TRUE, eval=TRUE}
-load(file = "../Data/CCR_data_Rhone.Rdata")
-area_nm <- "Rhône"
-```
-
-```{r fn_limites, echo=FALSE, eval=TRUE}
-# Des fonctions de dessin pour les departements et les préfectures
-drawDept <- function(departements, idx = NA, flag.add = FALSE, flag.name=TRUE, col = "red"){
-  if(is.na(idx)) {idx <- (1:length(departements))}
-  for (i in seq_along(idx)){
-    plot(departements[[i]]$polygon, add = flag.add)
-    if(flag.name){
-      points(departements[[i]]$city_xy[1], departements[[i]]$city_xy[2], pch = 19, col = col)
-      text(
-        departements[[i]]$city_xy[1], 
-        departements[[i]]$city_xy[2]+5000, 
-        departements[[i]]$city, col = col)
-    }
-  }
-  NULL
-}
-
-boundingboxDept <- function(departements, idx = NA){
-  bb <- matrix(NaN, 2,2)
-  if(is.na(idx)) {idx <- (1:length(departements))}
-  for (i in seq_along(idx)){
-    b <- departements[[i]]$polygon$limits
-    if (i == 1) {bb <- b} 
-    else {
-      bb[1,1] <- min(bb[1,1], b[1,1])
-      bb[1,2] <- min(bb[1,2], b[1,2])
-      bb[2,1] <- max(bb[2,1], b[2,1])
-      bb[2,2] <- max(bb[2,2], b[2,2])
-      }
-    }
-  colnames(bb) <- c("X","Y")
-  rownames(bb) <- c("Min","Max")
-  bb
-}
+area_nm   <- "Rhone" # Selection de la zone dans "BPL", "Creuse", "Oise", "Rhone"
+load(file <- paste0("../Data/CCR_data_", area_nm, ".Rdata"))
 ```
 
 # Limites géographiques de l'analyse
@@ -223,11 +185,11 @@ knitr::kable(tab, caption = "Répartition Test/Training par départements - Appa
 
 ```
 
-Save in RData
+# Save in RData
 
 ```{r}
 dat = db.create(LSUB)
 dat = db.locate(dat,c("X_TEMP","Y_TEMP"),"x")
-save(list=c("dat","dpts"),file="../Data/CCR_69.Rdata")
+save(list=c("dat","dpts"),file=paste0("../Data/CCR_", area_nm, ".Rdata"))
 ```
 

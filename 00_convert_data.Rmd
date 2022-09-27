@@ -1,0 +1,172 @@
+---
+title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - Import des données"
+author: "X. Freulon, N. Desassis, H. Wackernagel"
+date: "31 juillet 2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Introduction
+
+Les packages utilisés pour les calculs sont chargés.
+
+```{r chargement des packages, eval=TRUE, ,echo = T,results='hide'}
+library(RGeostats)
+library(Matrix)
+library(geojsonR)
+library(maptools)
+library(tmap)
+library(rgdal)
+```
+
+```{r settings, eval=TRUE, echo=F, results='hide'}
+rm(list=ls())
+set.seed(1334555)
+constant.define("asp",1)
+```
+
+## Données géographiques
+
+Pour la cartographie, les shapefiles sont téléchargés sur le site de données publiques :
+
+https://www.data.gouv.fr/fr/datasets/carte-des-departements-2-1/
+
+Ces données sont utilisées pour définir les limites des départements et la position des préfectures.
+
+```{r fn_carto, echo=FALSE, eval=TRUE}
+read_carto <- function(){
+  poly_all <- NA
+  dpts <- list()
+  for (i in 1:length(dpts_id)){
+    path_to_geog <- paste0("../Data/departement-", dpts_id[i],"/")
+    # lecture du shapefile et calcul des coordonnées
+    front <- readOGR(dsn=paste0(path_to_geog,"admin-departement.shp"))
+    front <- spTransform(front, CRS("+init=EPSG:2154"))
+    # lecture du shapefile et calcul des coordonnées
+    places <- readOGR(dsn = paste0(path_to_geog,"places.shx"))
+    places <- spTransform(places, CRS("+init=EPSG:2154"))
+    # recherche de la préfecture dans la liste des localités
+    idx_mainCity <-(1:length(places@data$name))[!is.na(places@data$name)& (places@data$name == dpts_city[i])]
+    # creation d'un polygon par département
+    p_dpt <- NA
+    npol  <- length(front@polygons[[1]]@Polygons)
+    for (p in 1:npol){
+      p_dpt     <- polygon.create(front@polygons[[1]]@Polygons[[p]]@coords, polygon = p_dpt)
+      poly_all  <- polygon.create(front@polygons[[1]]@Polygons[[p]]@coords, polygon = poly_all)
+    }
+  
+  # liste des polygones par départements
+  dpts[[1+length(dpts)]] <- list(
+    idx  = dpts_id[i], 
+    name = dpts_nm[i],
+    city = dpts_city[i],
+    polygon = p_dpt,
+    city_xy  = places@coords[idx_mainCity,])
+    }
+
+  list(dpts = dpts, polygon = poly_all)
+}
+```
+
+## Données CCR
+
+Chargement des données fournies par CCR tous les données disponibles
+
+```{r fn_CCR, eval=TRUE, echo=FALSE}
+read_CCR <- function(departements){
+  DAT <- data.frame()
+  for (idx in seq_along(departements)){
+    DAT <- rbind(DAT, read.csv(paste0("../Data/data", departements[[idx]]$idx,".csv"),header=T))
+    }
+  DAT
+}
+```
+
+## Conversion des données en fichier RGeostats
+
+Pour cette évaluation de SPDE, CCR a fourni plusieurs bases correspondant à différents cas d'usage:
+
+* une base regroupant les biens de 9 départements pour régions *Bretagne* et *Pays de Loire*.
+
+* une base du département du *Rhône* (la conversion est faite uniquement sur cette base)
+
+* une base du département de l'*Oise*
+
+* une base du département de la *Creuse*
+
+Il s'agit dans un premier temps de convertir les données les données disponible (fichiers csv et shapefile) en un unique fichier Rdata.
+
+## Régions Bretagne et Pays de la loire
+
+```{r data_BPL, echo=FALSE, eval=FALSE}
+area_nm <- "BPL" # Bretagne et Pays de Loire" 
+dpts_id <- c(29, 56, 22, 35, 44, 85, 49, 53, 72)
+dpts_nm <- c("Finistère", "Morbihan", "Côtes d'Armor", "Ile et Vilaine", "Loire Atlantique", "Vendée", "Maine et Loire", "Mayenne", "Sarthe")
+dpts_city <- c("Quimper", "Vannes", "Saint-Brieuc", "Rennes", "Nantes", "La Roche-sur-Yon", "Angers", "Laval", "Le Mans")
+ll_dpt <- rep("Non défini", 100)
+ll_dpt[dpts_id] <- dpts_nm
+# Lecture
+res     <- read_carto()
+dpts    <- res$dpts
+polygon <- res$polygon
+DAT     <- read_CCR(departements = dpts)
+# Ecriture
+save(list = c("DAT", "polygon", "dpts"), file = paste0("../Data/CCR_data_", area_nm,".Rdata"))
+```
+
+## Département du Rhône
+
+```{r data_Rhone, echo=FALSE, eval=TRUE}
+area_nm <- "Rhone"
+dpts_id <- c(69)
+dpts_nm <- c("Rhône")
+dpts_city <- c("Lyon")
+ll_dpt <- rep("Non défini", 100)
+ll_dpt[dpts_id] <- dpts_nm
+# Lecture
+res     <- read_carto()
+dpts    <- res$dpts
+polygon <- res$polygon
+DAT     <- read_CCR(departements = dpts)
+# Ecriture
+save(list = c("DAT", "polygon", "dpts"), file = paste0("../Data/CCR_data_", area_nm,".Rdata"))
+```
+
+## Département de l'Oise
+
+```{r data_Oise, echo=FALSE, eval=FALSE}
+area_nm <- "Oise"
+dpts_id <- c(60)
+dpts_nm <- c("Oise")
+dpts_city <- c("Creil")
+ll_dpt <- rep("Non défini", 100)
+ll_dpt[dpts_id] <- dpts_nm
+# Lecture
+res     <- read_carto()
+dpts    <- res$dpts
+polygon <- res$polygon
+DAT     <- read_CCR(departements = dpts)
+# Ecriture
+save(list = c("DAT", "polygon", "dpts"), file = paste0("../Data/CCR_data_", area_nm,".Rdata"))
+```
+
+## Département de la Creuse
+
+```{r data_Creuse, echo=FALSE, eval=FALSE}
+area_nm <- "Creuse"
+dpts_id <- c(23)
+dpts_nm <- c("Creuse")
+dpts_city <- c("Guéret")
+ll_dpt <- rep("Non défini", 100)
+ll_dpt[dpts_id] <- dpts_nm
+# Lecture
+res     <- read_carto()
+dpts    <- res$dpts
+polygon <- res$polygon
+DAT     <- read_CCR(departements = dpts)
+# Ecriture
+save(list = c("DAT", "polygon", "dpts"), file = paste0("../Data/CCR_data_", area_nm,".Rdata"))
+```
+
+

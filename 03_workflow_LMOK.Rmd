@@ -7,9 +7,28 @@
     html_document: default
 ---
 
+# Introduction
+
+Le script met en oeuvre l'estimation de la surface d'un bien immobilier dans le cadre d'un modèle linéaire à coefficients variant spatialement.
+
+On distingue les biens immobiliers selon leur nature Maisons/Appartement: $1:n = H \cup F$.
+
+Une observation $k \in 1:n$ par son type : $k \in H$ ou $k \in F$.
+
+Pour les maisons, 
+$$
+k \in H, S_k = Z^{(H)}_0(s_k) + Z^{(H)}_0(s_k) \times N_k + \epsilon_k
+$$
+Pour les appartements,
+$$
+k \in F, S_k = Z^{(F)}_0(s_k) + Z^{(F)}_0(s_k) \times N_k + \epsilon_k
+$$
+L'écart type de l'erreur de modélisation $\epsilon_k$ dépend du type de bien. Plusieurs modèles de corrégionalisation ont été définis pour les champs latents modélisant les coefficients du modèle linéaire $Z$ variant spatialement :
+$M_1$, $M_2$ et $M_3$.
+
 # Initialisation
 
-R et RGeostats
+Les packages *RGeostats* et *Matrix* sont utilisés.
 
 ```{r R_init, echo=TRUE, eval=TRUE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -20,21 +39,17 @@ constant.define("asp",1)
 
 ```
 
+Les paramètres du modèle LMOK sont définis dans le fichier *conf.R* :
+
+* le type du modèle M1, M2, M3
+* le nombre de facteurs du modèle linéaire (constante et nombre de pièces) ou (nombre de pièces uniquement)
+
 
 Paramétrage 
 
 ```{r}
 source(file = "./conf.R")
 ```
-
-
-```{r Model_init, echo = TRUE, eval = TRUE}
-
-# required in SPDE_LMOK_init_geometry if mesh not provided
-param <- list(margin = margin, nodes = nodes, nu = nu)
-```
-
-
 
 
 LMOK fonctions
