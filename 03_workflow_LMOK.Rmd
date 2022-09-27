@@ -1,5 +1,5 @@
 ---
-  title: "Workflow LMOK"
+  title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - Workflow LMOK"
   author: "X. Freulon, N. Desassis, H. Wackernagel"
   date: "12 août 2022"
   output:
@@ -36,7 +36,6 @@ library(RGeostats)
 library(Matrix)
 rm(list=ls())
 constant.define("asp",1)
-
 ```
 
 Les paramètres du modèle LMOK sont définis dans le fichier *conf.R* :
@@ -51,27 +50,30 @@ Paramétrage
 source(file = "./conf.R")
 ```
 
-
 LMOK fonctions
 
 ```{r LMOK_init, echo = TRUE, eval=TRUE}
 source(file = "./functions_spde.R")
 source(file = "./functions_draw_data.R")
 source(file = "./functions_Xval.R")
-source(file = "./prepareDb.R")
+source(file = "./functions_prepareDB.R")
 ```
 
+Chargement des données CCR
+
 ```{r}
-load(file = "../Data/CCR_69.Rdata")
+load(file = nm_input_RData)
 dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
 folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 
+# Estimation des paramètres
+
+Initialisation de la fonction de vraisemblance
 
 ```{r}
 # illustration avec les paramètres de simulation
 modelMulti(x_ini, verbose = TRUE)
-
 
 # Creation of the function computing the log-likelihood
 fn_MLL <- SPDE_LMOK_init_MLL(dat, param2model = modelMulti, verbose = TRUE,mesh=mesh)
@@ -81,7 +83,6 @@ fn_MLL(x_ini, verbose = TRUE)
 
 Optimisation de la vraisemblance
 
-
 ```{r}
 cont$maxit = 1
 res   <- optim(par = x_ini, fn = fn_MLL, verbose = F, method="Nelder-Mead", control = cont)
@@ -89,10 +90,6 @@ x_est = res$par
 ```
 
 ```{r LMOK_MLL, eval=TRUE, echo=FALSE}
-#res   <- optim(par = x_est, fn = fn_MLL, verbose=F, method="Nelder-Mead", control = cont)
-#x_est <- res$par
-
-
 tab <- rbind(x_ini, x_est)
 colnames(tab) <- namesParam
 rownames(tab) <- c("Initial", "Final")

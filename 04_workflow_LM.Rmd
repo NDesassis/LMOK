@@ -1,5 +1,5 @@
 ---
-  title: "Workflow LMOK"
+  title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - Workflow LM"
   author: "X. Freulon, N. Desassis, H. Wackernagel"
   date: "12 août 2022"
   output:
@@ -20,35 +20,31 @@ constant.define("asp",1)
 
 ```
 
+Paramétrage 
 
 ```{r}
-set.seed(seed=125875)
-n.fold = 10 # Number of folds for the cross-validation
-nm_var = "S_cap"
-nm_fac = "NB_cap"
-nm_type = "C1NATURE"
-type = "flat"
-nm_sel = "sel_flat"
-N=50
+source(file = "./conf.R")
+N <- 50 # Nombre minimal de biens par unité géographique
 ```
 
+Fonctions auxiliaires
+
 ```{r}
-source("prepareDb.R")
+source("functions_prepareDB.R")
 source("functions_Xval.R")
 ```
 
 ```{r}
-load(file = "../Data/CCR_69.Rdata")
-folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
+load(file = nm_input_RData)
+folds <- sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 
 ```{r}
-datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
-datXval <- db.add(datXval, folds,locnames = "code")
 ```
 
 ```{r}
-fn_estim = function(dbin,dbout,radix = "kfold_LM")
+# Regression linéaire globale
+fn_estim_LM1 = function(dbin,dbout,radix = "kfold_LM")
 {
   Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
   X = as.data.frame(db.extract(dbin,db.getname(dbin,"f",NA),flag.compress = T))
@@ -62,7 +58,8 @@ fn_estim = function(dbin,dbout,radix = "kfold_LM")
   return(dbout)
 }
 
-fn_estim = function(dbin,dbout,radix = "kfold_LM_admin")
+# Regression linéaire par unité administrative (nombre de biens > N)
+fn_estim_LM2 = function(dbin,dbout,radix = "kfold_LM_admin")
 {
   Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
   X = as.data.frame(db.extract(dbin,db.getname(dbin,"f",NA),flag.compress = T))
@@ -100,18 +97,42 @@ fn_estim = function(dbin,dbout,radix = "kfold_LM_admin")
 }
 ```
 
-```{r}
-datXval=kfold_compute(datXval, fn_estim = fn_estim, radix = "kfold", 
+# Régression linéaire globale
+
+```{r LM_global}
+datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+datXval <- db.add(datXval, folds,locnames = "code")
+datXval <- kfold_compute(datXval, fn_estim = fn_estim_LM1, radix = "kfold_LM1", 
                          verbose = FALSE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM1.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
 datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM1.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 ```
 
-```{r}
+# Régression linéaire par unité administrative
+
+
+```{r LM_CODE_INSEE}
+datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+datXval <- db.add(datXval, folds,locnames = "code")
+datXval <- kfold_compute(datXval, fn_estim = fn_estim_LM2, radix = "kfold_LM2", 
+                         verbose = FALSE)
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM2.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+
+datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM2.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
+```
+
+# Calcul de la vraisemblance
+
+## Régression globale
+
+```{r ll_global}
 computeLogLike = function(dbin)
 {
   Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
@@ -122,6 +143,21 @@ computeLogLike = function(dbin)
   return(length(res) * log(vres) + sum(res^2)/vres)
 }
 
+
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"flat")
+
+l1 = computeLogLike(datXval)
+
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"house")
+
+l2 = computeLogLike(datXval)
+
+(-l1-l2)/2
+```
+
+## Régression par unité administrative
+
+```{r ll_local}
 computeLogLike = function(dbin)
 {
   Y = db.extract(dbin,db.getname(dbin,"z",1),flag.compress = T)
@@ -151,6 +187,8 @@ computeLogLike = function(dbin)
   }
     return(l)
 }
+
+
 datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"flat")
 
 l1 = computeLogLike(datXval)
