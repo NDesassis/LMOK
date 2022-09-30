@@ -1,0 +1,122 @@
+---
+  title: "Estimation de la surface par modèle linéaire à coefficients variant spatialement - Compute LMOK"
+  author: "X. Freulon, N. Desassis, H. Wackernagel"
+  date: "12 août 2022"
+  output:
+    pdf_document: default
+    html_document: default
+---
+  
+# Introduction
+
+
+# Initialisation
+
+Les packages *RGeostats* et *Matrix* sont utilisés.
+
+```{r R_init, echo=TRUE, eval=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RGeostats)
+library(Matrix)
+rm(list=ls())
+constant.define("asp",1)
+```
+
+Paramétrage 
+
+```{r}
+source(file = "./conf.R")
+```
+
+LMOK fonctions
+
+```{r LMOK_init, echo = TRUE, eval=TRUE}
+source(file = "./functions_spde.R")
+```
+
+Chargement des données CCR
+
+```{r}
+load(file = nm_input_raw)
+load(file = nm_output_model)
+dat <- db.create(DAT)
+dat <- db.locate(dat, names = c("X_TEMP", "Y_TEMP"), loctype = "x", flag.locnew = TRUE)
+```
+
+# Calcul des surfaces sur les données sélectionnées
+
+Est pris en compte le type de modèle et le nombre de facteurs
+
+```{r computing the surfaces}
+# Ajout d'une variable pour stocker la surface estimée ()
+nm_mod <- paste("SPDE", type, model, sep = "_" )
+nm_S   <- paste0(nm_mod, "_S.estim")
+# ajout d'une variable pour stocker les surfaces calculées
+dat <- db.add(dat, TEMP_S = NA)
+dat <- db.rename(dat, names = "TEMP_S", newnames = nm_S)
+
+# sélection des biens pour lesquels le calcul de la surface est possible
+sel <- (!is.na(dat$N4NBPIEC)) &
+         (dat$N4NBPIEC > 0) & (dat$N4NBPIEC <= 100) &
+         (dat$C1NATURE == ifelse(type == "house", 1, 2))
+dat <- db.sel(dat, sel)
+
+# Calcul par interpolation barycentrique des coefficients
+dat <- SPDE_LMOK_compute(model = SPDE, dbout = dat,
+                           nsim = 0, seed = NA, flag.ce = FALSE,
+                           radix = nm_mod)
+
+values <- db.extract(dat, names = c(paste0(
+    paste("SPDE", type, model, sep = "_" ),
+    ".Z*.estim"), "N4NBPIEC", "C1NATURE"), flag.compress = TRUE
+  )
+
+np <- dim(values)[1]
+nf <- dim(values)[2] - 2
+print(paste0("Nombre de biens estimés      : ", np))
+print(paste0("Nombre de coeffients estimés : ", nf))
+
+# Mono - facteurs = {N}
+if ((model %in% c("Mono"))&(type %in% c("house", "flat"))) {
+  stopifnot(nf == 1)
+  S_esti <- values[,1]*values[,2]
+}
+
+if ((model %in% c("Mono"))&(type %in% c("both"))) {
+  stopifnot(nf == 2)
+  S_esti <- 
+    values[,1]*values[,3]*(values[,4] == 1) + # les maisons
+    values[,2]*values[,3]*(values[,4] == 2)   # les appartements
+}
+
+# M1 or M2 - facteurs = {1, N}
+if (model %in% c("M1", "M2")) {
+  stopifnot(nf == 2)
+  S_esti <- values[,1] + values[,2]*values[,3]
+}
+
+if (model %in% c("M3")) {
+  stopifnot(nf == 4)
+  S_esti <- 
+    (values[,1]+values[,2]*values[,5])*(values[,6] == 1) + # les maisons
+    (values[,3]+values[,4]*values[,5])*(values[,6] == 2)   # les appartements
+}
+dat <- db.replace(dat, name = nm_S, tab = S_esti, flag.sel = TRUE)
+```
+
+# Contrôle et statistiques
+
+A compléter par les tests à réaliser
+
+# Sauvegarde
+
+La structure *dat* est un objet de type db-class de RGeostats. 
+On a acces au dataframe via l'attribut dat@items.
+
+```{r final saving}
+# Si une sauvegarde sous forme de data-frame
+df <- dat@items
+class(df)
+str(df)
+write.csv(df, file = "../Data/final.csv")
+```

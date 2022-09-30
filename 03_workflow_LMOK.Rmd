@@ -189,3 +189,25 @@ plot(grd, name = paste("SPDE_LMOK", pref, paste0("Z", i), "ce.stdev", sep = ".")
 tab <- db.stat.multi(grd, names = "SPDE_LMOK.*")
 knitr::kable(round(tab,2), caption = "Estimation des coefficients")
 ```
+
+# Sauvegarde du modèle SPDE
+
+Le modèle est recalculé pour une sauvegarde, puis une réutilisation avec imputation sur une nouvelle base.
+
+```{r LMOK_final, echo=TRUE, eval=TRUE}
+# Initialisation
+dat = prepareDb(dat, 
+                nm_fac = nm_fac,
+                nm_var = nm_var, 
+                nm_sel = nm_sel,
+                nm_type = nm_type,
+                type = type,
+                sigma = resModel$sigma
+                )
+SPDE <- SPDE_LMOK_krigsim(dbout = NA, dbin = dat, model = m_est, mesh = mesh, verbose = TRUE)
+# Sauvegarde du modèle
+save(list = c("SPDE"), file = nm_output_model)
+
+```
+
+

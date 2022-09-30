@@ -5,8 +5,11 @@ n.fold = 10            # Number of folds to compute the cross-validation
 
 # zone à traiter
 area_nm   <- "Rhone" # Selection de la zone dans "BPL", "Creuse", "Oise", "Rhone"
+nm_input_raw   <- paste0("../Data/CCR_data_", area_nm, ".Rdata")
 nm_input_RData <- paste0("../Data/CCR_", area_nm, ".Rdata")
 nm_input_mesh  <- paste0("../Data/CCR_", area_nm, "_meshCoords.ascii")
+# sauvegarde du modèle
+nm_output_model<- paste0("../Data/CCR_", area_nm, "_model_SPDE.Rdata")
 
 # Parameters of the linear model
 nu      <- 1          # regularity coefficient of the Matern covariance
@@ -28,8 +31,8 @@ mesh = meshing(pts,triswitch="nqQ")
 #plot(poly,add=T)
 
 # Choose model type among the next combinations
-type   = "house" # "flat" "house" "mono_house" "mono_flat" or "both" (only valid for M3)
-model  = "M1"    # Mono M1 M2 MonoBivar
+type   = "house" # "house", "flat", "both"
+model  = "M1"    # "Mono", "M1", "M2", "M3" 
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)
 
