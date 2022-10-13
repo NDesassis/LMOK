@@ -109,10 +109,14 @@ kfold_compute <- function(dbin, fn_estim, radix = "kfold", verbose = TRUE){
 #'@param flag.fig A Boolean variable controlling the display of two plots:
 #' - actual value vs. estimated value
 #' - residual vs. estimated value
+#'@param plot_fn A list of functions used A Boolean variable controlling the display of the figures
+#'  Used only if flag.fig is equal to TRUE
+#' - start() to initialize the output of the graphic
+#' - end()   to close the output graphic
 #'@return The table containing the computed statistics for each fold and for the total input file.
 kfold_results <- function(dbin, name_real, name_esti, 
                           stats = c("number", "mean", "MAE", "RMSE"),
-                          flag.fig = TRUE){
+                          flag.fig = TRUE, plot_fn = NA){
   
   res <- as.matrix(db.extract(dbin, names = c(name_real, name_esti), flag.compress = TRUE))
   idx_in_c <- db.getcols(dbin, loctype = "code")
@@ -147,24 +151,38 @@ kfold_results <- function(dbin, name_real, name_esti,
   if(flag.fig){
     constant.define("asp",1)
     # figure : actual value vs. estimated value
-    correlation(dbin, name2 = name_real, name1 = name_esti,
-                title = paste0("Cross validation of ", name_real, " - Kriging"),
-                xlab  = "Estimated value", ylab = "Actual value",
-                flag.iso = TRUE, flag.aspoint = ifelse(dbin$nactive > 500, FALSE, TRUE),
-                flag.diag = TRUE, diag.col = "red", diag.lwd = 2,
-                flag.ce = TRUE, ce.col = "blue"
-    )
+    if(
+      (class(plot_fn) == "list")&
+      (plot_fn$start(file_name = paste(name_esti, "real_vs_estim", sep = "_"), radix = "xval"))) {
+      correlation(dbin, name2 = name_real, name1 = name_esti,
+                  title = paste0("Cross validation of ", name_real, " by ", name_esti),
+                  xlab  = "Estimated value", ylab = "Actual value",
+                  flag.iso = TRUE, flag.aspoint = ifelse(dbin$nactive > 500, FALSE, TRUE),
+                  flag.diag = TRUE, diag.col = "red", diag.lwd = 2,
+                  flag.ce = TRUE, ce.col = "blue"
+      )
+      plot_fn$end()
+    }
+    # figure : actual value vs. estimated value
+    
     # figure : residual vs. estimated value
-    dbin <- db.add(dbin, Residual = dbin[,name_real] - dbin[,name_esti])
-    correlation(dbin, name2 = "Residual", name1 = name_esti,
-                title = paste0("Cross validation of ", name_real, " - Kriging"),
-                xlab  = "Estimated value", ylab = "Residual",
-                flag.iso = FALSE, flag.aspoint = ifelse(dbin$nactive > 500, FALSE, TRUE),
-                flag.diag = FALSE,
-                flag.ce = TRUE, ce.col = "blue"
-    )
-    abline(h = 0.0, col = "red", lwd = 2)  
-  }
+    if(
+      (class(plot_fn) == "list")&
+      (plot_fn$start(file_name = paste(name_esti, "residual_vs_estim", sep = "_"), radix = "xval"))) {
+      dbin <- db.add(dbin, Residual = dbin[,name_real] - dbin[,name_esti])
+      correlation(dbin, name2 = "Residual", name1 = name_esti,
+                  title = paste0("Cross validation of ", name_real, " by ", name_esti),
+                  xlab  = "Estimated value", ylab = "Residual",
+                  flag.iso = FALSE, flag.aspoint = ifelse(dbin$nactive > 500, FALSE, TRUE),
+                  flag.diag = FALSE,
+                  flag.ce = TRUE, ce.col = "blue"
+      )
+      abline(h = 0.0, col = "red", lwd = 2)  
+      plot_fn$end()
+    }
+    # figure : residual vs. estimated value
+    
+  } # flag.fig == TRUE
   tab 
 }
 

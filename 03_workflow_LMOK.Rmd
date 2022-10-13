@@ -48,6 +48,16 @@ Paramétrage
 
 ```{r}
 source(file = "./conf.R")
+
+# initialisation of the graphics (saving or not in a file)
+source(file = "./functions_figures.R")
+gg <- fig.init(
+  study.key    = paste("LMOK", type, model, sep = "_"), 
+  flag.graphic = TRUE, 
+  flag.file    = TRUE, 
+  type.file    = "png", 
+  dir.fig      = "../figures/")
+
 ```
 
 LMOK fonctions
@@ -65,6 +75,7 @@ Chargement des données CCR
 load(file = nm_input_RData)
 dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
 folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
+
 ```
 
 # Estimation des paramètres
@@ -130,12 +141,16 @@ datXval <- db.add(datXval, folds,loctype = "code")
   
 # analyse des résultats par "folds" 
 datXval <- db.locate(datXval, names = "folds", loctype = "code", flag.locnew = TRUE)
-tab     <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab     <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", 
+                    stats = c("number", "min", "max", "mean", "MAE", "RMSE"),
+                    flag.fig = TRUE, plot_fn = gg)
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
 # analyse des résultats par nature (nm_type)
 datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold.S.estim", 
+                     stats = c("number", "min", "max", "mean", "MAE", "RMSE"), 
+                     flag.fig = FALSE, plot_fn = NA)
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
 # Map of the absolute value of the validation residual
@@ -145,7 +160,12 @@ datXval <- db.add(datXval, AResidual = abs(datXval[,nm_var] - datXval[,"kfold.S.
 dat.grd <- db.grid.init(datXval, dcell = rep(1000, 2))
 dat.grd <- db.stat.grid(datXval, dat.grd, fun = "mini")
 dat.grd <- db.rename(dat.grd, names = "Stats.AResidual", newnames = "Minimum of residual")
-plot(dat.grd, pos.legend = 3)
+
+if(gg$start(file_name = paste0("Minimum_of_residual"), radix = "xval")) {
+  plot(dat.grd, pos.legend = 3)
+  gg$end()
+  }
+
 ```
 
 # Estimation des coefficients
@@ -172,6 +192,9 @@ grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = mesh,
 grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = mesh,
                     nsim = nsim, seed = NA, flag.ce = TRUE,
                     radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
+grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = mesh,
+                    nsim = 2, seed = 2568, flag.ce = FALSE,
+                    radix = paste("SPDE_LMOK", pref, sep = "."), verbose = TRUE)
 ```
 
 
@@ -180,15 +203,121 @@ grd <- SPDE_LMOK_krigsim(grd, dbin = dat, model = m_est, mesh = mesh,
 ```{r LMOK_results, echo=TRUE, eval=TRUE}
 nf <- length(db.getcols(dat, loctype = "f"))
 for (i in 1:nf) {
+  vn <- paste(paste0("Z", i), sep = ".") 
 # map of the estimated values
-plot(grd, name = paste("SPDE_LMOK", pref, paste0("Z",i), "estim", sep = "."), pos.legend = 8)
+  if(gg$start(file_name = paste0("Z",i, "_estim"), h = 480, w = 480)) {
+    plot(grd, 
+         name  = paste("SPDE_LMOK", pref, vn, "estim", sep = "."),
+         title = paste0(vn, " (estim:", pref, ")" ),
+          pos.legend = 8
+         )
+  gg$end()
+  }
 # map of the standard deviation of the estimation error
-plot(grd, name = paste("SPDE_LMOK", pref, paste0("Z", i), "ce.stdev", sep = "."), pos.legend = 8)
+  if(gg$start(file_name = paste0("Z",i, "_stdev"))) {
+    plot(grd, 
+         name  = paste("SPDE_LMOK", pref, vn, "ce.stdev", sep = "."),
+         title = paste0(vn, " (std:", pref, ")" ),
+          pos.legend = 8
+         )
+  gg$end()
+  }
+
+# map of a simulation (id = 1)
+  if(gg$start(file_name = paste0("Z",i, "_S1"))) {
+    plot(grd, 
+         name  = paste("SPDE_LMOK", pref, vn, "S.1", sep = "."),
+         title = paste0(vn, " (simulation:", pref, ")" ),
+          pos.legend = 8
+         )
+  gg$end()
+  }
 }
+
 # statistics
 tab <- db.stat.multi(grd, names = "SPDE_LMOK.*")
 knitr::kable(round(tab,2), caption = "Estimation des coefficients")
 ```
+
+# Carte de la surface calculée
+
+```{r LMOK_surface, echo=TRUE, eval=TRUE}
+# Computing the surface from the coefficients and the number of rooms
+nr <- 2:5 # number of rooms
+nf <- length(db.getcols(dat, loctype = "f"))
+vn <- paste("SPDE_LMOK", pref, paste0("Z", 1:nf),"estim", sep = ".") 
+X <- as.matrix(db.extract(grd, names =  vn, flag.compress = TRUE))
+
+# house OR flat (M1 or M2)
+if (model %in% c("M1", "M2")) {
+  # computing the surfaces 
+  S <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
+  if (nf == 1) {
+    for (i in seq_along(nr)) {S[,i] <- X[,1]*nr[i]}
+  } else if (nf == 2) {
+    for (i in seq_along(nr)) {S[,i] <- X[,1]+X[,2]*nr[i]}
+  } else {stop(paste0("Inconsistency with nf = ", nf, " for model ", model))}
+  # ploting the surface maps
+  for (i in seq_along(nr)) {
+    vn  <- paste0(pref, "_N", nr[i])
+    grd <- db.replace(grd, name = vn, tab = S[,i], flag.sel = TRUE)
+    if(gg$start(file_name = paste(type, model, paste0("N",nr[i]), sep = "_"), 
+                radix = "surface",  h = 480, w = 480)) {
+    plot(grd, name  = vn,
+         title = paste0("Surface of ", type, "s with ", nr[i], " rooms"),
+          pos.legend = 8
+         )
+  gg$end()
+    } # end of plot
+  } # Number of rooms
+} # M1 OR M2
+
+# computing the surface for house AND flat (M3)
+if (model %in% c("M3")) {
+  S_house <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
+  S_flat  <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
+  if (nf == 2) {
+    for (n in nr) {
+      S_house[,n] <- X[,1]*n
+      S_flat[,n]  <- X[,2]*n
+      }
+  } else if (nf == 4) {
+    for (n in nr) {
+      S_house[,n] <- X[,1]+X[,3]*n
+      S_flat[,n]  <- X[,2]+X[,4]*n
+      }
+  } else {stop(paste0("Inconsistency with nf = ", nf, " for model ", model))}
+
+  # ploting the surface maps - houses
+  for (i in seq_along(nr)) {
+    vn  <- paste0("house_", pref, "_N", nr[i])
+    grd <- db.replace(grd, name = vn, tab = S_house[,i], flag.sel = TRUE)
+    if(gg$start(file_name = paste("house", model, paste0("N",nr[i]), sep = "_"), 
+                radix = "surface",  h = 480, w = 480)) {
+    plot(grd, name  = vn,
+         title = paste0("Surface of ", "house", "s with ", nr[i], " rooms"),
+          pos.legend = 8
+         )
+    gg$end()
+    } # End of plot
+  } # Number of rooms
+    
+  # ploting the surface maps - flats
+  for (i in seq_along(nr)) {
+    vn  <- paste0("flat_", pref, "_N", nr[i])
+    grd <- db.replace(grd, name = vn, tab = S_flat[,i], flag.sel = TRUE)
+    if(gg$start(file_name = paste("flat", model, paste0("N",nr[i]), sep = "_"), 
+                radix = "surface",  h = 480, w = 480)) {
+    plot(grd, name  = vn,
+         title = paste0("Surface of ", "flat", "s with ", nr[i], " rooms"),
+          pos.legend = 8
+         )
+  gg$end()
+  } # End of plot
+ } # Number of rooms
+} # M3
+```
+
 
 # Sauvegarde du modèle SPDE
 

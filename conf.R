@@ -31,7 +31,7 @@ mesh = meshing(pts,triswitch="nqQ")
 #plot(poly,add=T)
 
 # Choose model type among the next combinations
-type   = "house" # "house", "flat", "both"
+type   = "flat" # "house", "flat", "both"
 model  = "M1"    # "Mono", "M1", "M2", "M3" 
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)

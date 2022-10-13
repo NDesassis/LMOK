@@ -169,4 +169,17 @@ DAT     <- read_CCR(departements = dpts)
 save(list = c("DAT", "polygon", "dpts"), file = paste0("../Data/CCR_data_", area_nm,".Rdata"))
 ```
 
+## Tables sur le jeux de données
+
+```{r talbes, echo=FALSE, eval=FALSE}
+# 
+nm_nature <- c("House", "Flat")
+nm_usage  <- c("rent", "owner", "let", "co-ownership")
+tab <- table(DAT$C1NATURE, DAT$C1USAGE)
+tab <- cbind(tab, table(DAT$C1NATURE))
+colnames(tab) <- c(nm_usage, "Total")
+rownames(tab) <- nm_nature
+tab
+table(DAT$C1USAGE)
+```
 
