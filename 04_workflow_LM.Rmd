@@ -24,7 +24,7 @@ Paramétrage
 
 ```{r}
 source(file = "./conf.R")
-N <- 50 # Nombre minimal de biens par unité géographique
+N <- N_adm # Nombre minimal de biens par unité géographique
 ```
 
 Fonctions auxiliaires
@@ -36,11 +36,10 @@ source("functions_Xval.R")
 
 ```{r}
 load(file = nm_input_RData)
+dat = filter_dat(dat)
 folds <- sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 
-```{r}
-```
 
 ```{r}
 # Regression linéaire globale

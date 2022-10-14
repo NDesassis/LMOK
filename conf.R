@@ -3,6 +3,7 @@ set.seed(seed=125875)  # Initialisation of the random generator (to reproduce si
 nsim = 1000            # Number of simulations to compute the conditional expectation
 n.fold = 10            # Number of folds to compute the cross-validation
 
+
 # zone à traiter
 area_nm   <- "Rhone" # Selection de la zone dans "BPL", "Creuse", "Oise", "Rhone"
 nm_input_RData <- paste0("../Data/CCR_", area_nm, ".Rdata")
@@ -33,5 +34,21 @@ model  = "M1"    # Mono M1 M2 MonoBivar
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)
 
+# number of data under which global regression is used (for regression by city)
+N_adm = 500
+
 source(file = paste0("./param_", model,".R"))
 
+# Options for the optimizer (maximization of the likelihood)
+optim_maxit = 100
+optim_method = "Nelder-Mead"
+
+
+#filter
+filter_dat = function(dat)
+{
+  temp = db.reduce(db.sel(dat,!dat[,"CED_CODE_ANON"]%in%c(5,9,16,14,22,23,28,35)))
+  temp = db.delete(temp,"sel")
+  temp$locators=dat$locators
+  return(temp)
+}

@@ -64,6 +64,7 @@ Chargement des données CCR
 ```{r}
 load(file = nm_input_RData)
 dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+dat = filter_dat(dat)
 folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 
@@ -84,8 +85,8 @@ fn_MLL(x_ini, verbose = TRUE)
 Optimisation de la vraisemblance
 
 ```{r}
-cont$maxit = 1
-res   <- optim(par = x_ini, fn = fn_MLL, verbose = F, method="Nelder-Mead", control = cont)
+cont$maxit = optim_maxit
+res   <- optim(par = x_ini, fn = fn_MLL, verbose = F, method=optim_method, control = cont)
 x_est = res$par
 ```
 
