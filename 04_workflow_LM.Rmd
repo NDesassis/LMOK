@@ -25,6 +25,16 @@ Paramétrage
 ```{r}
 source(file = "./conf.R")
 N <- N_adm # Nombre minimal de biens par unité géographique
+
+# initialisation of the graphics (saving or not in a file)
+source(file = "./functions_figures.R")
+gg <- fig.init(
+  study.key    = paste("LM", type, paste0("N",N), sep = "_"), 
+  flag.graphic = TRUE, 
+  flag.file    = TRUE, 
+  type.file    = "png", 
+  dir.fig      = "../figures/")
+
 ```
 
 Fonctions auxiliaires
@@ -103,11 +113,18 @@ datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
 datXval <- db.add(datXval, folds,locnames = "code")
 datXval <- kfold_compute(datXval, fn_estim = fn_estim_LM1, radix = "kfold_LM1", 
                          verbose = FALSE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM1.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+
+# k-fold results by folds AND graphics 
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM1.S.estim", 
+            stats = c("number", "min", "max", "mean", "MAE", "RMSE"), 
+            flag.fig = TRUE, plot_fn = gg)
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
+# k-fold results by type
 datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM1.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM1.S.estim", 
+                     stats = c("number", "min", "max", "mean", "MAE", "RMSE"),
+                     flag.fig = FALSE, plot_fn = NA)
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 ```
 
@@ -119,11 +136,15 @@ datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
 datXval <- db.add(datXval, folds,locnames = "code")
 datXval <- kfold_compute(datXval, fn_estim = fn_estim_LM2, radix = "kfold_LM2", 
                          verbose = FALSE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM2.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM2.S.estim", 
+                     stats = c("number", "min", "max", "mean", "MAE", "RMSE"),
+                     flag.fig = TRUE, plot_fn = gg)
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 
 datXval <- db.locate(datXval, names = nm_type, loctype = "code", flag.locnew = TRUE)
-tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM2.S.estim", flag.fig = TRUE, stats = c("number", "min", "max", "mean", "MAE", "RMSE"))
+tab <- kfold_results(datXval, name_real = nm_var, name_esti = "kfold_LM2.S.estim", 
+                     stats = c("number", "min", "max", "mean", "MAE", "RMSE"),
+                     flag.fig = FALSE, plot_fn = NA)
 knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K=", n.fold,")"))
 ```
 

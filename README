@@ -10,6 +10,7 @@
 02_compute_meshing.Rmd
 03_workflow_LMOK.Rmd
 04_workflow_LM.Rmd
+05_compute_LMOK.Rmd
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Fichier de fonctions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -31,6 +32,7 @@ param_MonoBivar.R
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ../LMOK - répertoire des scripts et fichier de configuration (sous git)
 ../Data - répertoire des données CCR et INSEE (uniquement en local ou sur le cloud des mines)
+../figures - dossier pour stocker les figures générées par le script
 Pour l'étude sur le département du Rhône, on a
 	data69.csv fichier initial CCR
 	departement-69 répertoire contenant les informations INSEE (limites,...)

@@ -15,6 +15,17 @@ set.seed(121122)
 area_nm   <- "Rhone" # Selection de la zone dans "BPL", "Creuse", "Oise", "Rhone"
 nm_input_RData <- paste0("../Data/CCR_", area_nm, ".Rdata")
 nm_output_mesh <- paste0("../Data/CCR_", area_nm, "_meshCoords.ascii")
+
+
+# initialisation of the graphics (saving or not in a file)
+source(file = "./functions_figures.R")
+gg <- fig.init(
+  study.key    = paste("LMOK", "meshing", sep = "_"), 
+  flag.graphic = TRUE, 
+  flag.file    = TRUE, 
+  type.file    = "png", 
+  dir.fig      = "../figures/")
+
 ```
 
 
@@ -27,18 +38,30 @@ grd = db.locate(grd,"Polygon","z")
 grd = morpho(grd,0.5,1.5,oper = "close")
 grd = morpho(grd,0.5,1.5,oper = "dilate",niter = 10)
 grd = morpho(grd,0.5,1.5,oper = "erode")
-# grdCoarse = db.create(flag.grid = TRUE, 
-#                       nx = grd$nx/2, 
-#                       dx = grd$dx*2, 
-#                       x0=grd$x0+grd$dx/2)
-# grdCoarse = migrate(dbin = grd, dbout = grdCoarse, radix="")
+grdCoarse = db.create(flag.grid = TRUE,
+                      nx = grd$nx/2,
+                      dx = grd$dx*2,
+                      x0=grd$x0+grd$dx/2)
+grdCoarse = migrate(dbin = grd, dbout = grdCoarse, radix="")
 # # grdCoarse = db.grid.refine(grd,nmult=c(2,2),flag.refine = F,flag.copy = T)
-# grdCoarse = db.rename(grdCoarse,grdCoarse$natt,"morpho")
-# plot(grdCoarse)
-# grdCoarse = db.stat.grid(dat,grdCoarse,"x1",fun="num")
-# grdCoarse = db.polygon(grdCoarse,polygon = poly)
-# plot(grdCoarse)
-# plot(poly,add=T, col = "yellow")
+grdCoarse = db.rename(grdCoarse,grdCoarse$natt,"morpho")
+
+# Plot of the coarse grid
+if(gg$start(file_name = paste0("coarse_grid_sel"), radix = "morpho")) {
+  plot(grdCoarse)
+  gg$end()
+  }
+
+grdCoarse = db.stat.grid(dat,grdCoarse,"x1",fun="num")
+grdCoarse = db.polygon(grdCoarse,polygon = poly)
+
+# Plot of limits and selected cells
+if(gg$start(file_name = paste0("limits_sel"), radix = "morpho")) {
+  plot(grdCoarse)
+  plot(poly,add=T, col = "yellow")
+  gg$end()
+  }
+
 
 ```
 
@@ -58,16 +81,25 @@ for(i in 1:grdCoarse$nech)
   coords = rbind(coords,cbind(x,y))
   
 }
-plot(coords,cex=.1)
+
+# Plot of limits and selected cells
+if(gg$start(file_name = paste0("points"), radix = "vertices")) {
+  plot(poly,col = "yellow", main = "Vertices of the meshing")
+  points(coords,cex=.1, add = TRUE)
+  gg$end()
+  }
+
 ```
 
 ```{r meshing, echo=TRUE, eval=TRUE}
-pts = db.create(x1=coords[,1],x2=coords[,2])
-mesh = meshing(pts,triswitch="nqQ")
-plot(mesh,lwd=0.1)
-#plot(poly,add=F)
-A=mesh.barycenter(dat,mesh)
-#plot(dat,add=T,cex=.1,name.post=1)
+pts  <- db.create(x1=coords[,1],x2=coords[,2])
+mesh <- meshing(pts,triswitch="nqQ")
+# Plot of final meshing
+if(gg$start(file_name = paste0("and_limits"), radix = "meshing")) {
+  plot(poly, col = "gray", main = "SPDE meshing")
+  plot(mesh,lwd=0.1, add = TRUE)
+  gg$end()
+  }
 ```
 
 ```{r saving, echo=TRUE, eval=TRUE}

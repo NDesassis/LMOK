@@ -87,6 +87,12 @@ compute_stat <- function(type = NA){
   tab  
 }
 
+tab <- rbind(compute_stat(type = 1)[1,], compute_stat(type = 2)[1,], compute_stat()[1,])
+rownames(tab) <- c("House", "Flat", "Total")
+colnames(tab) <- c("Number", "Room number", "Surface", "Number and Surface")
+tab <- round(tab, 1)
+knitr::kable(tab, digits = 1, caption = "Proportion des variables definies")
+
 knitr::kable(compute_stat(), digits = 1, caption = "Proportion des variables definies pour tous les biens")
 knitr::kable(compute_stat(type = 1), digits = 1, caption = "Proportion des variables definies pour tous les maisons")
 knitr::kable(compute_stat(type = 2), digits = 1, caption = "Proportion des variables definies pour tous les appartements")
@@ -114,23 +120,27 @@ knitr::kable(tab, caption = "Proportion des appartements cumulée en fonction du
 Selection des biens avec un nombre de pièces <= 20
 
 ```{r subset CCR, eval=TRUE, echo=T}
-# Capping mono-variable par le quantile 98%
-Q98_M_NB   <- quantile(DAT$N4NBPIEC[DAT$C1NATURE == 1], probs = 0.98, na.rm = TRUE)
-Q98_A_NB   <- quantile(DAT$N4NBPIEC[DAT$C1NATURE == 2], probs = 0.98, na.rm = TRUE)
-Q98_M_S    <- quantile(DAT$N4SURFAC[DAT$C1NATURE == 1], probs = 0.98, na.rm = TRUE)
-Q98_A_S    <- quantile(DAT$N4SURFAC[DAT$C1NATURE == 2], probs = 0.98, na.rm = TRUE)
+tab <- rbind(summary(DAT$N4NBPIEC), summary(DAT$N4SURFAC))
+rownames(tab) <- c("Room number", "Surface")
+round(tab,1)
+
+# Capping mono-variable par le quantile 2%-98%
+Q98_M_NB   <- quantile(DAT$N4NBPIEC[DAT$C1NATURE == 1], probs = c(0.02,0.98), na.rm = TRUE)
+Q98_A_NB   <- quantile(DAT$N4NBPIEC[DAT$C1NATURE == 2], probs = c(0.02,0.98), na.rm = TRUE)
+Q98_M_S    <- quantile(DAT$N4SURFAC[DAT$C1NATURE == 1], probs = c(0.02,0.98), na.rm = TRUE)
+Q98_A_S    <- quantile(DAT$N4SURFAC[DAT$C1NATURE == 2], probs = c(0.02,0.98), na.rm = TRUE)
 NB_cap     <- rep(NaN, nrow(DAT))
-NB_cap[DAT$C1NATURE == 1] <- pmin(DAT$N4NBPIEC[DAT$C1NATURE == 1], Q98_M_NB)
-NB_cap[DAT$C1NATURE == 2] <- pmin(DAT$N4NBPIEC[DAT$C1NATURE == 2], Q98_A_NB)
+NB_cap[DAT$C1NATURE == 1] <- pmax(pmin(DAT$N4NBPIEC[DAT$C1NATURE == 1], Q98_M_NB[2]), Q98_M_NB[1])
+NB_cap[DAT$C1NATURE == 2] <- pmax(pmin(DAT$N4NBPIEC[DAT$C1NATURE == 2], Q98_A_NB[2]), Q98_A_NB[1])
 S_cap     <- rep(NaN, nrow(DAT))
-S_cap[DAT$C1NATURE == 1] <- pmin(DAT$N4SURFAC[DAT$C1NATURE == 1], Q98_M_S)
-S_cap[DAT$C1NATURE == 2] <- pmin(DAT$N4SURFAC[DAT$C1NATURE == 2], Q98_A_S)
+S_cap[DAT$C1NATURE == 1] <- pmax(pmin(DAT$N4SURFAC[DAT$C1NATURE == 1], Q98_M_S[2]), Q98_M_S[1])
+S_cap[DAT$C1NATURE == 2] <- pmax(pmin(DAT$N4SURFAC[DAT$C1NATURE == 2], Q98_A_S[2]), Q98_A_S[1])
 DAT <- cbind(DAT, NB_cap, S_cap)
 
-tab <- matrix(c(Q98_M_NB, Q98_M_S, Q98_A_NB, Q98_A_S), 2,2, byrow = TRUE)
-colnames(tab) <- c(nm_X, nm_Y)
+tab <- matrix(c(Q98_M_NB, Q98_M_S, Q98_A_NB, Q98_A_S), 2,4, byrow = TRUE)
+colnames(tab) <- c(rep(nm_X,2), rep(nm_Y, 2))
 rownames(tab) <- c("Maisons", "Appartements")
-knitr::kable(tab, caption = "Valeurs des seuils d'écrêtage (Quantile 98%)")
+knitr::kable(tab, caption = "Valeurs des seuils d'écrêtage (Quantiles 2% et 98%)")
 ```
 
 
@@ -191,5 +201,12 @@ knitr::kable(tab, caption = "Répartition Test/Training par départements - Appa
 dat = db.create(LSUB)
 dat = db.locate(dat,c("X_TEMP","Y_TEMP"),"x")
 save(list=c("dat","dpts"),file=paste0("../Data/CCR_", area_nm, ".Rdata"))
+
+tab <- round(rbind(
+  db.stat.multi(db.sel(dat, C1NATURE == 1), names = c("NB_cap", "S_cap")),
+  db.stat.multi(db.sel(dat, C1NATURE == 2), names = c("NB_cap", "S_cap"))), digits = 2)
+  
+knitr::kable(tab, caption = "Statistics sur les données de référence pour les maisons et les appartements")
+
 ```
 

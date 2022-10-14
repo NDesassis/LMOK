@@ -48,10 +48,76 @@ SPDE_LMOK_krigsim <- function(dbout, dbin, model, mesh = NA,
   # measurement error
   sigma <- sqrt(db.extract(dbin, db.getname(dbin, "v", 1), flag.compress = TRUE))
 
-  geo   <- SPDE_LMOK_init_geometry(dbin, mesh, verbose)
-  mod   <- SPDE_LMOK_init_model(model, sigma, geo, verbose)
-  spde  <- SPDE_LMOK_init_spde(geo, mod, verbose)
+  geo  <- SPDE_LMOK_init_geometry(dbin, mesh, verbose)
+  mod  <- SPDE_LMOK_init_model(model, sigma, geo, verbose)
+  spde <- SPDE_LMOK_init_spde(geo, mod, verbose)
   
+  SPDE <- list(
+           geometry = geo,
+           model    = mod,
+           spde     = spde
+  )
+  
+  # computing the results on the output file (if necessary)
+  if (!is.na(dbout)){
+    res <- SPDE_LMOK_compute(model = SPDE,dbout = dbout,
+                             nsim = nsim, seed = seed, flag.ce = flag.ce,
+                             radix = radix, verbose = verbose
+                            )
+  } else {
+    res <- SPDE
+  }
+  return(res)
+}
+
+# functions to compute LMOK on a output db from the SPDE model
+
+#' compute the estimation/simulation of the locally varying parameters
+#' 
+#' The SPDE approach is used to compute the estimations of the latent fields.
+#' 
+#'@param model The a SPDE model computed by SPDE_LMOK_krigsim with dbout == NA.
+#'It is a list with the folloging attributes:
+#' - geometry  This is the output of the function SPDE_LMOK_init_geometry.
+#' - model     This is the output of the function SPDE_LMOK_init_model
+#' - spde      This is the output of the function SPDE_LMOK_init_spde
+#'@param dbout The db-class structure containing the target file
+#'@param nsim The number of conditional simulations of the latent fields 
+#'(i.e. the spatially varying parameters). 
+#'If nsim == 0, only the kriging value is computed.
+#'@param seed The seed used by the generator of the random numbers.
+#'If seed == NA, the generator is not initialized. 
+#'The random generator should be reset to be able to reproduce simulations. 
+#'@param flag.ce A Boolean value controlling the use of the simulations (nsim > 0).
+#'If flag.ce == TRUE, the mean and the standard deviation of the simulations are computed.
+#'If flag.ce == FALSE, the simulations are stored in output file *dbout*.
+#'@param radix A string used as prefix of the variables created in the output file *dbout*.
+#'@param verbose A Boolean variable to control the printed messages
+#'@return The target Db where the following variables have been added:
+#'If nsim == 0,
+#' - the estimation of the latent fields (if nsim==0)
+#' If nsim > 0 and flag.ce == FALSE,
+#' - the conditional simulations of the latent fields (if nsim>=0 and flag.ce == FALSE)
+#' If nsim > 0 and flag.ce == TRUE,
+#' - the conditional expectation computed as the mean of the simulations
+#' - the conditional standard deviation computed as the standard deviation of simulations
+#' These variables are multiplied for each one of the latent fields (numbered from 1).
+SPDE_LMOK_compute <- function(model, dbout,
+                              nsim = 0, seed = NA, flag.ce = FALSE, 
+                              radix = "SPDE_LMOK", verbose = FALSE){
+
+  # initialization from the input model
+  geo  <- model$geometry
+  mod  <- model$model
+  spde <- model$spde
+  
+  print(paste0("length(spde$Z)     = ", length(spde$Z)))
+  print(paste0("length(spde$coeff) = ", length(spde$coeff)))
+  print(paste0("geo$mesh$npoints  = ", length(geo$mesh$npoints)))
+  
+  # check the consistency between the spde model and the mesh
+  stopifnot(length(spde$Z)/length(spde$coeff) == geo$mesh$npoints)
+
   # computing simulations on the mesh (if necessary)
   if (nsim > 0){
     if(!is.na(seed)) {set.seed(seed = seed)}
