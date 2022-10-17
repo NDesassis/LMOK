@@ -46,7 +46,7 @@ source("functions_Xval.R")
 
 ```{r}
 load(file = nm_input_RData)
-dat = filter_dat(dat)
+dat = filter_dat(dat,filter_list)
 folds <- sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 

@@ -73,3 +73,24 @@ prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,sigma=1)
   dat <- db.locate(dat, name = c(nm_var), loctype = "z", flag.locnew = TRUE)
   return(dat)
 }
+
+
+filter = function(dat,selection)
+{
+  temp = db.reduce(db.sel(dat,selection))
+  temp = db.delete(temp,"sel")
+  temp$locators=dat$locators
+  return(temp)
+}
+
+filter_dat = function(dat,filter_list)
+{
+  sel = rep(TRUE,dat$nech)
+  for(selmaker in filter_list)
+  {
+    sel = sel & selmaker(dat) 
+  }
+  
+  filter(dat,sel)
+}
+

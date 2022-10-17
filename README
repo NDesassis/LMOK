@@ -27,6 +27,7 @@ param_M2.R
 param_M3.R
 param_Mono.R
 param_MonoBivar.R
+filter_examples.R
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Description de l'aborescences - Structure des fichiers
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

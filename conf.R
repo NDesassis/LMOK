@@ -1,3 +1,5 @@
+source("filter_examples.R")
+source("functions_prepareDB.R")
 # General parameters
 set.seed(seed=125875)  # Initialisation of the random generator (to reproduce simulations)
 nsim = 1000            # Number of simulations to compute the conditional expectation
@@ -47,11 +49,7 @@ optim_maxit = 100
 optim_method = "Nelder-Mead"
 
 
-#filter
-filter_dat = function(dat)
-{
-  temp = db.reduce(db.sel(dat,!dat[,"CED_CODE_ANON"]%in%c(5,9,16,14,22,23,28,35)))
-  temp = db.delete(temp,"sel")
-  temp$locators=dat$locators
-  return(temp)
-}
+#filters: a list which contains all the filters to apply. The filters are some functions
+#They can be written in the file "filter_examples.R" which already contains some examples.
+
+filter_list = list(good_cedantes)
