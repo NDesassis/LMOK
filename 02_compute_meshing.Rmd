@@ -12,10 +12,10 @@ output:
 library(RGeostats)
 rm(list=ls())
 set.seed(121122)
-area_nm   <- "Rhone" # Selection de la zone dans "BPL", "Creuse", "Oise", "Rhone"
-nm_input_RData <- paste0("../Data/CCR_", area_nm, ".Rdata")
-nm_output_mesh <- paste0("../Data/CCR_", area_nm, "_meshCoords.ascii")
+```
 
+```{r}
+source(file = "./conf.R")
 
 # initialisation of the graphics (saving or not in a file)
 source(file = "./functions_figures.R")
@@ -31,8 +31,11 @@ gg <- fig.init(
 
 ```{r loading_data, echo=TRUE, eval=TRUE}
 load(file = nm_input_RData)
+dat = filter_dat(dat,filter_list)
+
 poly = dpts[[1]]$polygon
-grd=db.grid.init(poly,nodes = c(50,50),margin=c(10,10))
+grd=db.grid.init(dat,nodes = c(50,50),margin=c(10,10))
+grd=db.polygon(grd, poly)
 grd = db.locate(grd,"Polygon","z")
 # grd = morpho(grd,0.5,1.5,oper = "dilate",niter = 3)
 grd = morpho(grd,0.5,1.5,oper = "close")

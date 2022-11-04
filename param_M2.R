@@ -4,13 +4,13 @@ if(type == "flat")
                     nu = nu,
                     sigma_0 = 18.878809,
                     sigma_1 = 5.477902,
-                    tau     = -1.519629,
+                    tau     = -0.5,
                     sigma   = 11.587706,
                     range   = 302.334218
   )
 
 if(type =="house")
-param_ini <- list(nodes   = nodes, margin  = margin,
+  param_ini <- list(nodes   = nodes, margin  = margin,
                   type = "IntFac", 
                   nu = nu,
                   sigma_0 = 58.61,

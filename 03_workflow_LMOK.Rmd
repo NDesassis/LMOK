@@ -278,14 +278,14 @@ if (model %in% c("M3")) {
   S_house <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
   S_flat  <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
   if (nf == 2) {
-    for (n in nr) {
-      S_house[,n] <- X[,1]*n
-      S_flat[,n]  <- X[,2]*n
+    for (n in seq_along(nr)) {
+      S_house[,n] <- X[,1]*nr[n]
+      S_flat[,n]  <- X[,2]*nr[n]
       }
   } else if (nf == 4) {
-    for (n in nr) {
-      S_house[,n] <- X[,1]+X[,3]*n
-      S_flat[,n]  <- X[,2]+X[,4]*n
+    for (n in seq_along(nr)) {
+      S_house[,n] <- X[,1]+X[,3]*nr[n]
+      S_flat[,n]  <- X[,2]+X[,4]*nr[n]
       }
   } else {stop(paste0("Inconsistency with nf = ", nf, " for model ", model))}
 

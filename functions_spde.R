@@ -148,6 +148,7 @@ SPDE_LMOK_compute <- function(model, dbout,
     if (nsim > 0) {
       Z_sim <- as.matrix(Z_out + (A_out%*%Res[1:n.mesh+(i-1)*n.mesh,]))
       
+      str(Z_sim)
       # storing the conditional expectation  
       if (flag.ce){
         nm_ce_estim <- paste(radix, paste0("Z",i), "ce.estim", sep = ".")
@@ -161,7 +162,7 @@ SPDE_LMOK_compute <- function(model, dbout,
       if (!flag.ce) {
         for (n in 1:nsim){
           nm_sim <- paste(radix, paste0("Z",i,".S"), n, sep = ".")
-          dbout <- db.replace(dbout, name = nm_sim, tab = Z_sim[,i])
+          dbout <- db.replace(dbout, name = nm_sim, tab = Z_sim[,n])
         }
       }
     } # end of simulations

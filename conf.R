@@ -11,6 +11,7 @@ area_nm   <- "Rhone" # Selection de la zone dans "BPL", "Creuse", "Oise", "Rhone
 nm_input_raw   <- paste0("../Data/CCR_data_", area_nm, ".Rdata")
 nm_input_RData <- paste0("../Data/CCR_", area_nm, ".Rdata")
 nm_input_mesh  <- paste0("../Data/CCR_", area_nm, "_meshCoords.ascii")
+nm_output_mesh <- nm_input_mesh
 # sauvegarde du modèle
 nm_output_model<- paste0("../Data/CCR_", area_nm, "_model_SPDE.Rdata")
 
@@ -34,8 +35,8 @@ mesh = NA
 #plot(poly,add=T)
 
 # Choose model type among the next combinations
-type   = "flat" # "house", "flat", "both"
-model  = "M1"    # "Mono", "M1", "M2", "M3" 
+type   = "both" # "house", "flat", "both"
+model  = "M3"    # "Mono", "M1", "M2", "M3" 
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)
 
@@ -45,7 +46,7 @@ N_adm = 500
 source(file = paste0("./param_", model,".R"))
 
 # Options for the optimizer (maximization of the likelihood)
-optim_maxit = 200
+optim_maxit = 1
 optim_method = "Nelder-Mead"
 
 
@@ -53,4 +54,4 @@ optim_method = "Nelder-Mead"
 #They can be written in the file "filter_examples.R" which already contains some examples.
 
 filter_list = list(lyon_suburb)
-#filter_list = list() # no filter
+# filter_list = list() # no filter
