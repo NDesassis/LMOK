@@ -73,7 +73,9 @@ Chargement des données CCR
 
 ```{r}
 load(file = nm_input_RData)
-dat = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+dat = prepareDb(dat = dat,
+                nm_fac = nm_fac, nm_var = nm_var, nm_sel = nm_sel, nm_type = nm_type,
+                type = type, model = model)
 dat = filter_dat(dat,filter_list)
 folds = sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 
@@ -127,6 +129,7 @@ datXval = prepareDb(dat,
                 nm_sel = nm_sel,
                 nm_type = nm_type,
                 type = type,
+                model = model,
                 sigma = resModel$sigma)
 datXval <- db.add(datXval, folds,loctype = "code")
 
@@ -180,7 +183,7 @@ dat = prepareDb(dat,
                 nm_var = nm_var, 
                 nm_sel = nm_sel,
                 nm_type = nm_type,
-                type = type,
+                type = type, model = model,
                 sigma = resModel$sigma
                 )
 # Output file
@@ -244,13 +247,14 @@ knitr::kable(round(tab,2), caption = "Estimation des coefficients")
 
 ```{r LMOK_surface, echo=TRUE, eval=TRUE}
 # Computing the surface from the coefficients and the number of rooms
+if(model %in% c("Mono", "M1", "M2", "M3")) {
 nr <- 2:5 # number of rooms
 nf <- length(db.getcols(dat, loctype = "f"))
 vn <- paste("SPDE_LMOK", pref, paste0("Z", 1:nf),"estim", sep = ".") 
 X <- as.matrix(db.extract(grd, names =  vn, flag.compress = TRUE))
 
-# house OR flat (M1 or M2)
-if (model %in% c("M1", "M2")) {
+# house OR flat (M1, M2 or Mono)
+if (type %in% c("house", "flat")) {
   # computing the surfaces 
   S <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
   if (nf == 1) {
@@ -271,10 +275,10 @@ if (model %in% c("M1", "M2")) {
   gg$end()
     } # end of plot
   } # Number of rooms
-} # M1 OR M2
+} # House or Flat
 
 # computing the surface for house AND flat (M3)
-if (model %in% c("M3")) {
+if (type %in% c("both")) {
   S_house <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
   S_flat  <- matrix(NaN, nrow = grd$nactive, ncol = length(nr))
   if (nf == 2) {
@@ -316,7 +320,9 @@ if (model %in% c("M3")) {
   gg$end()
   } # End of plot
  } # Number of rooms
-} # M3
+} # Both
+  
+}
 ```
 
 
@@ -332,6 +338,7 @@ dat = prepareDb(dat,
                 nm_sel = nm_sel,
                 nm_type = nm_type,
                 type = type,
+                model = model,
                 sigma = resModel$sigma
                 )
 SPDE <- SPDE_LMOK_krigsim(dbout = NA, dbin = dat, model = m_est, mesh = mesh, verbose = TRUE)

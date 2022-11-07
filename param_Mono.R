@@ -1,4 +1,4 @@
-if(type == "mono_flat")
+if(type == "flat")
   param_ini <- list(nodes   = nodes, margin  = margin,
                     type = "MonoF", 
                     nu = nu,
@@ -7,7 +7,7 @@ if(type == "mono_flat")
                     sigma   = 12.485693
   )
 
-if(type == "mono_house")
+if(type == "house")
   param_ini <- list(nodes   = nodes, margin  = margin,
                     type = "MonoH", 
                     nu = nu,

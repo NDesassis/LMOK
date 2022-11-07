@@ -22,7 +22,7 @@ nm_fac  <- "NB_cap"   # Name of the factor (number of rooms)
 nm_type <- "C1NATURE" # Name of the type (1 = House / 2 = Flat)
 
 # Definition of the meshing of the domain used for SPDE
-nodes   <- c(150,150) # Number of nodes in the main directions
+nodes   <- c(100,100) # Number of nodes in the main directions
 margin  <- 0.2        # Proportion to extend the bouding box of the domain
 param   <- list(margin = margin, nodes = nodes, nu = nu)
 
@@ -36,14 +36,22 @@ mesh = NA
 
 # Choose model type among the next combinations
 type   = "both" # "house", "flat", "both"
-model  = "M3"    # "Mono", "M1", "M2", "M3" 
+model  = "OK"   # "OK", "Mono", "M1", "M2", "M3" 
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)
 
 # number of data under which global regression is used (for regression by city)
 N_adm = 500
 
-source(file = paste0("./param_", model,".R"))
+if ((model == "Mono")&(type == "both")) {
+  source(file = paste0("./param_", "Mono", "Bivar",".R"))
+} else if ((model == "OK")&(type %in% c("house", "flat"))) {
+  source(file = paste0("./param_", "Mono",".R"))
+} else if ((model == "OK")&(type == "both")) {
+  source(file = paste0("./param_", "Mono", "Bivar",".R"))
+} else {
+  source(file = paste0("./param_", model,".R"))
+}
 
 # Options for the optimizer (maximization of the likelihood)
 optim_maxit = 1
@@ -53,5 +61,5 @@ optim_method = "Nelder-Mead"
 #filters: a list which contains all the filters to apply. The filters are some functions
 #They can be written in the file "filter_examples.R" which already contains some examples.
 
-filter_list = list(lyon_suburb)
-# filter_list = list() # no filter
+# filter_list = list(lyon_suburb)
+filter_list = list() # no filter

@@ -47,6 +47,15 @@ source("functions_Xval.R")
 ```{r}
 load(file = nm_input_RData)
 dat = filter_dat(dat,filter_list)
+dat = prepareDb(dat, 
+                nm_fac = nm_fac,
+                nm_var = nm_var, 
+                nm_sel = nm_sel,
+                nm_type = nm_type,
+                type = type,
+                model = model
+                )
+
 folds <- sample(x = 1:n.fold, size = dat$nech, replace = TRUE)
 ```
 
@@ -109,7 +118,7 @@ fn_estim_LM2 = function(dbin,dbout,radix = "kfold_LM_admin")
 # Régression linéaire globale
 
 ```{r LM_global}
-datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type, model)
 datXval <- db.add(datXval, folds,locnames = "code")
 datXval <- kfold_compute(datXval, fn_estim = fn_estim_LM1, radix = "kfold_LM1", 
                          verbose = FALSE)
@@ -132,7 +141,7 @@ knitr::kable(round(tab,2), caption = paste0("Validation croisée par K-fold (K="
 
 
 ```{r LM_CODE_INSEE}
-datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type)
+datXval <- prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,type, model)
 datXval <- db.add(datXval, folds,locnames = "code")
 datXval <- kfold_compute(datXval, fn_estim = fn_estim_LM2, radix = "kfold_LM2", 
                          verbose = FALSE)
@@ -164,11 +173,13 @@ computeLogLike = function(dbin)
 }
 
 
-datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"flat")
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type, 
+                    type = "flat", model = model)
 
 l1 = computeLogLike(datXval)
 
-datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"house")
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type, 
+                    type = "house", model = model)
 
 l2 = computeLogLike(datXval)
 
@@ -209,11 +220,13 @@ computeLogLike = function(dbin)
 }
 
 
-datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"flat")
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,
+                    type = "flat", model = model)
 
 l1 = computeLogLike(datXval)
 
-datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,"house")
+datXval = prepareDb(dat,nm_fac,nm_var,nm_sel,nm_type,
+                    type = "house", model = model)
 
 l2 = computeLogLike(datXval)
 
