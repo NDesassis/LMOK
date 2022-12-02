@@ -111,9 +111,11 @@ SPDE_LMOK_compute <- function(model, dbout,
   mod  <- model$model
   spde <- model$spde
   
-  print(paste0("length(spde$Z)     = ", length(spde$Z)))
-  print(paste0("length(spde$coeff) = ", length(spde$coeff)))
-  print(paste0("geo$mesh$npoints  = ", length(geo$mesh$npoints)))
+  if (verbose) {
+    print(paste0("length(spde$Z)     = ", length(spde$Z)))
+    print(paste0("length(spde$coeff) = ", length(spde$coeff)))
+    print(paste0("geo$mesh$npoints  = ", length(geo$mesh$npoints)))
+  }
   
   # check the consistency between the spde model and the mesh
   stopifnot(length(spde$Z)/length(spde$coeff) == geo$mesh$npoints)

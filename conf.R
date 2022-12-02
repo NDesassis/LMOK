@@ -29,14 +29,14 @@ param   <- list(margin = margin, nodes = nodes, nu = nu)
 # The mesh is computed by the script *makeMeshing.Rmd*
 coords = read.csv(file = nm_input_mesh)
 pts = db.create(x1=coords[,2],x2=coords[,3])
-#mesh = meshing(pts,triswitch="nqQ")
-mesh = NA
+mesh = meshing(pts,triswitch="nqQ")
+#mesh = NA
 #plot(mesh,lwd=0.1)
 #plot(poly,add=T)
 
 # Choose model type among the next combinations
-type   = "both" # "house", "flat", "both"
-model  = "OK"   # "OK", "Mono", "M1", "M2", "M3" 
+type   = "flat" # "house", "flat", "both"
+model  = "M1"    # "OK", "Mono", "M1", "M2", "M3" 
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)
 

@@ -19,6 +19,8 @@
 #'@return The input db where the role of each required variable has been setup.
 prepareDb = function(dat,nm_fac,nm_var,nm_sel,nm_type,type,model,sigma=1)
 {
+  stopifnot(type  %in% c("house", "flat", "both"))
+  stopifnot(model %in% c("OK", "Mono", "M1", "M2", "M3"))
   # re-initialisation de la base de données
   dat  <- db.locerase(dat, "z")
   dat  <- db.locerase(dat, "f")
