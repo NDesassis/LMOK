@@ -50,7 +50,7 @@ modelMulti <- function(x, verbose = TRUE){
   nu = 1
   # F1 and F3
   c1 <- as.matrix(rbind(
-    cbind(matrix(c(x[1]^2, rep(x[1]*x[2]*tanh(x[5]), 2), x[2]^2), 2, 2),
+    cbind(matrix(c(x[1]^2, rep(x[1]*x[2]*max(-0.99, min(0.99, tanh(x[5]))), 2), x[2]^2), 2, 2),
           matrix(0.0,2,2)),
     matrix(0.0, 2, 4)))
   
@@ -59,7 +59,7 @@ modelMulti <- function(x, verbose = TRUE){
   c2 <- as.matrix(rbind(
     matrix(0.0,2,4),
     cbind(matrix(0.0, 2,2), 
-          matrix(c(x[3]^2, rep(x[3]*x[4]*tanh(x[6]), 2), x[4]^2), 2, 2))))
+          matrix(c(x[3]^2, rep(x[3]*x[4]*max(-0.99, min(0.99, tanh(x[6]))), 2), x[4]^2), 2, 2))))
   model <- model.create(8, range = abs(x[8]), sill = c2, model = model)
   
   if (verbose){

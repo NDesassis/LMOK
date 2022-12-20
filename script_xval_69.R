@@ -36,7 +36,7 @@ nm_fac  <- "NB_cap"   # Name of the factor (number of rooms)
 nm_nature <- "C1NATURE" # Name of the nature (1 = House / 2 = Flat)
 
 # Options for the optimizer (maximization of the likelihood)
-optim_maxit = 10
+optim_maxit = 100
 optim_method = "Nelder-Mead"
 
 #------------------------------------------------------
@@ -58,9 +58,10 @@ case_model   <- c(
 # Selection of the case to be treated
 #------------------------------------------------------
 sel_case  <- c(TRUE, TRUE, TRUE, TRUE)
-sel_model <- c(TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE)
-# sel_model <- c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE)
+sel_model <- c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
 
+#------------------------------------------------------
+# Table of the RMSE
 #------------------------------------------------------
 res_RMSE <- matrix(NaN, nrow = length(case_model), ncol = length(case_nature))
 c_name   <- c()
@@ -69,6 +70,18 @@ for (c in (1:length(sel_case))){
 }
 colnames(res_RMSE) <- c_name
 rownames(res_RMSE) <- case_model
+
+#------------------------------------------------------
+# Table of the MLL
+#------------------------------------------------------
+res_MLL <- matrix(NaN, nrow = length(case_model), ncol = length(case_nature))
+c_name   <- c()
+for (c in (1:length(sel_case))){
+  c_name <- c(c_name, paste0(case_nature[c], "-", case_factor[c]))
+}
+colnames(res_MLL) <- c_name
+rownames(res_MLL) <- case_model
+
 
 #------------------------------------------------------
 # Loading the input data
@@ -177,6 +190,7 @@ for (m in seq_along(case_model)[sel_model]) {
         datMLL <- prepareDb(dat, nm_fac, nm_var, nm_sel, nm_nature, nature, model)
         fn_MLL <- SPDE_LMOK_init_MLL(datMLL, param2model = modelMulti, verbose = FALSE,mesh=mesh)
         res    <- optim(par = x_ini, fn = fn_MLL, verbose = F, method=optim_method, control = cont)
+        res_MLL[m,c] <- res$value
         m_est  <- modelMulti(res$par, verbose = FALSE)$model
         s_est  <- modelMulti(res$par, verbose = FALSE)$sigma
         # estimation function
@@ -208,10 +222,17 @@ for (m in seq_along(case_model)[sel_model]) {
 } # loop over the models (m in 1:7)
 
 res_RMSE <- res_RMSE[sel_model, sel_case]
+res_MLL  <- res_MLL[sel_model, sel_case]
 #------------------------------------------------------
-# Table of the results
+# Table of the results - RMSE
 #------------------------------------------------------
 knitr::kable(round(res_RMSE, 2), 
              caption = paste0("RMSE of the cross validation (K = ", n.fold,")"))
 write.csv(res_RMSE, file = "LMOK_Xvalidation_69_table_of_RMSE.csv")
 
+#------------------------------------------------------
+# Table of the results - MLL
+#------------------------------------------------------
+knitr::kable(round(res_MLL, 2), 
+             caption = paste0("MLL for the parameter inference"))
+write.csv(res_MLL, file = "LMOK_Xvalidation_69_table_of_MLL.csv")

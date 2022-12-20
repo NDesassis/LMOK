@@ -15,7 +15,7 @@ if(type =="house")
                   nu = nu,
                   sigma_0 = 58.61,
                   sigma_1 = 119.83,
-                  tau     = 0.2,
+                  tau     = 0.0,
                   sigma   = 10,
                   range   = 639805.5
 )
@@ -30,7 +30,7 @@ if(type =="house")
 #' ------------------------------------------------------------
 modelMulti<- function(x, verbose = TRUE){
   nu = param$nu
-  c0 <- matrix(c(x[1]^2, rep(x[1]*x[2]*tanh(x[3]),2), x[2]^2),nrow=2)
+  c0 <- matrix(c(x[1]^2, rep(x[1]*x[2]*max(-0.99,min(0.99,tanh(x[3]))),2), x[2]^2),nrow=2)
   model <- model.create(8, range = abs(x[4]), sill = c0)
   if (verbose){
     print(model)

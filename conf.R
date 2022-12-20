@@ -30,18 +30,18 @@ param   <- list(margin = margin, nodes = nodes, nu = nu)
 coords = read.csv(file = nm_input_mesh)
 pts = db.create(x1=coords[,2],x2=coords[,3])
 mesh = meshing(pts,triswitch="nqQ")
-#mesh = NA
+# mesh = NA
 #plot(mesh,lwd=0.1)
 #plot(poly,add=T)
 
 # Choose model type among the next combinations
 type   = "flat" # "house", "flat", "both"
-model  = "M1"    # "OK", "Mono", "M1", "M2", "M3" 
+model  = "Mono"    # "OK", "Mono", "M1", "M2", "M3" 
 nm_sel = paste0("sel_",type)
 nm_model = paste0(type,"_",model)
 
 # number of data under which global regression is used (for regression by city)
-N_adm = 500
+N_adm = 50
 
 if ((model == "Mono")&(type == "both")) {
   source(file = paste0("./param_", "Mono", "Bivar",".R"))
@@ -54,12 +54,12 @@ if ((model == "Mono")&(type == "both")) {
 }
 
 # Options for the optimizer (maximization of the likelihood)
-optim_maxit = 1
+optim_maxit = 100
 optim_method = "Nelder-Mead"
 
 
 #filters: a list which contains all the filters to apply. The filters are some functions
 #They can be written in the file "filter_examples.R" which already contains some examples.
-
-# filter_list = list(lyon_suburb)
-filter_list = list() # no filter
+filter_list = list(lyon_suburb)
+# filter_list = list(good_cedantes)
+# filter_list = list() # no filter
